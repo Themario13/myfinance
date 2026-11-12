@@ -46,12 +46,12 @@ public class QuickAddActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(22), dp(20), dp(22), dp(18));
-        root.setBackground(round(Color.WHITE, 24));
+        root.setBackground(round(0xFF1D2026, 26));
 
         title = new TextView(this);
         title.setTextSize(19);
         title.setTypeface(Typeface.DEFAULT_BOLD);
-        title.setTextColor(0xFF14171F);
+        title.setTextColor(0xFFEEF1F4);
         root.addView(title);
 
         LinearLayout seg = new LinearLayout(this);
@@ -65,6 +65,7 @@ public class QuickAddActivity extends Activity {
         seg.addView(bInc, new LinearLayout.LayoutParams(0, dp(42), 1f));
         bExp.setOnClickListener(v -> setType("exp"));
         bInc.setOnClickListener(v -> setType("inc"));
+        seg.setVisibility(View.GONE);
         root.addView(seg);
 
         amount = new EditText(this);
@@ -74,6 +75,7 @@ public class QuickAddActivity extends Activity {
         amount.setGravity(Gravity.CENTER);
         amount.setInputType(InputType.TYPE_CLASS_NUMBER | InputType.TYPE_NUMBER_FLAG_DECIMAL);
         amount.setBackground(null);
+        amount.setHintTextColor(0xFF3A3F48);
         root.addView(amount);
 
         final EditText note = new EditText(this);
@@ -81,7 +83,9 @@ public class QuickAddActivity extends Activity {
         note.setSingleLine(true);
         note.setImeOptions(EditorInfo.IME_ACTION_DONE);
         note.setPadding(dp(14), dp(12), dp(14), dp(12));
-        note.setBackground(round(0xFFF1F3F6, 12));
+        note.setBackground(round(0xFF22262D, 14));
+        note.setTextColor(0xFFEEF1F4);
+        note.setHintTextColor(0xFF5D6470);
         root.addView(note);
 
         LinearLayout btns = new LinearLayout(this);
@@ -90,14 +94,14 @@ public class QuickAddActivity extends Activity {
         Button cancel = new Button(this);
         cancel.setText("Cancelar");
         cancel.setAllCaps(false);
-        cancel.setTextColor(0xFF14171F);
-        cancel.setBackground(round(0xFFF1F3F6, 14));
+        cancel.setTextColor(0xFFEEF1F4);
+        cancel.setBackground(round(0xFF2A2F37, 14));
         Button ok = new Button(this);
         ok.setText("Guardar");
         ok.setAllCaps(false);
         ok.setTypeface(Typeface.DEFAULT_BOLD);
-        ok.setTextColor(Color.WHITE);
-        ok.setBackground(round(0xFF14171F, 14));
+        ok.setTextColor(0xFF0B1712);
+        ok.setBackground(round(0xFF3EE6A8, 14));
         LinearLayout.LayoutParams l1 = new LinearLayout.LayoutParams(0, dp(48), 1f);
         l1.setMargins(0, 0, dp(8), 0);
         btns.addView(cancel, l1);
@@ -106,7 +110,7 @@ public class QuickAddActivity extends Activity {
 
         TextView open = new TextView(this);
         open.setText("Abrir la app");
-        open.setTextColor(0xFF0E9F6E);
+        open.setTextColor(0xFF3EE6A8);
         open.setGravity(Gravity.CENTER);
         open.setPadding(0, dp(14), 0, 0);
         open.setOnClickListener(v -> {
@@ -146,11 +150,11 @@ public class QuickAddActivity extends Activity {
         type = t;
         boolean e = "exp".equals(t);
         title.setText(e ? "Nuevo gasto" : "Nuevo ingreso");
-        bExp.setBackground(round(e ? 0xFF14171F : 0xFFF1F3F6, 12));
-        bExp.setTextColor(e ? Color.WHITE : 0xFF6B7280);
-        bInc.setBackground(round(!e ? 0xFF14171F : 0xFFF1F3F6, 12));
-        bInc.setTextColor(!e ? Color.WHITE : 0xFF6B7280);
-        amount.setTextColor(e ? 0xFFE5484D : 0xFF0E9F6E);
+        bExp.setBackground(round(e ? 0xFF323741 : 0xFF22262D, 12));
+        bExp.setTextColor(e ? 0xFFEEF1F4 : 0xFF8B93A1);
+        bInc.setBackground(round(!e ? 0xFF323741 : 0xFF22262D, 12));
+        bInc.setTextColor(!e ? 0xFFEEF1F4 : 0xFF8B93A1);
+        amount.setTextColor(e ? 0xFFFF6B6B : 0xFF3EE6A8);
     }
 
     private void save(String note) {

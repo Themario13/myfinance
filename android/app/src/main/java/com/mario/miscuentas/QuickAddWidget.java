@@ -5,9 +5,10 @@ import android.appwidget.AppWidgetManager;
 import android.appwidget.AppWidgetProvider;
 import android.content.Context;
 import android.content.Intent;
+import android.view.View;
 import android.widget.RemoteViews;
 
-/** Widget de la pantalla de inicio: resumen + botones para anotar. */
+/** Widget de la pantalla de inicio: tu resumen del mes + botón para anotar. */
 public class QuickAddWidget extends AppWidgetProvider {
 
     @Override
@@ -15,27 +16,32 @@ public class QuickAddWidget extends AppWidgetProvider {
         updateAll(c, m, ids);
     }
 
-    static PendingIntent addIntent(Context c, String type, int req) {
+    static PendingIntent addIntent(Context c) {
         Intent i = new Intent(c, QuickAddActivity.class);
-        i.putExtra("type", type);
+        i.putExtra("type", "exp");
         i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
-        return PendingIntent.getActivity(c, req, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        return PendingIntent.getActivity(c, 202, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
     static void updateAll(Context c, AppWidgetManager m, int[] ids) {
-        String summary = QuickStore.prefs(c).getString("widget", "Abre la app para ver tu resumen");
+        QuickStore.Summary s = QuickStore.summary(c);
+        String sub = s.sub;
         int pend = QuickStore.pendingCount(c);
-        if (pend > 0) summary = summary + "\n" + pend + " anotación" + (pend > 1 ? "es" : "") + " pendiente" + (pend > 1 ? "s" : "") + " de clasificar";
-        Intent open = new Intent(c, MainActivity.class);
-        open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        PendingIntent openPi = PendingIntent.getActivity(c, 201, open, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        if (pend > 0) sub = pend + " anotación" + (pend > 1 ? "es" : "") + " sin clasificar · " + sub;
+        PendingIntent openPi = QuickStore.openApp(c, 201);
         for (int id : ids) {
             RemoteViews v = new RemoteViews(c.getPackageName(), R.layout.widget_quick);
-            v.setTextViewText(R.id.widget_summary, summary);
-            v.setOnClickPendingIntent(R.id.widget_summary, openPi);
-            v.setOnClickPendingIntent(R.id.widget_title, openPi);
-            v.setOnClickPendingIntent(R.id.widget_exp, addIntent(c, "exp", 202));
-            v.setOnClickPendingIntent(R.id.widget_inc, addIntent(c, "inc", 203));
+            v.setTextViewText(R.id.w_main, s.main);
+            v.setTextColor(R.id.w_main, s.bad ? 0xFFFF6B6B : 0xFFEEF1F4);
+            v.setTextViewText(R.id.w_sub, sub);
+            v.setProgressBar(R.id.w_bar_ok, 100, s.progress, false);
+            v.setProgressBar(R.id.w_bar_warn, 100, s.progress, false);
+            v.setProgressBar(R.id.w_bar_bad, 100, s.progress, false);
+            v.setViewVisibility(R.id.w_bar_ok, !s.bad && !s.warn ? View.VISIBLE : View.GONE);
+            v.setViewVisibility(R.id.w_bar_warn, s.warn ? View.VISIBLE : View.GONE);
+            v.setViewVisibility(R.id.w_bar_bad, s.bad ? View.VISIBLE : View.GONE);
+            v.setOnClickPendingIntent(R.id.w_root, openPi);
+            v.setOnClickPendingIntent(R.id.w_add, addIntent(c));
             m.updateAppWidget(id, v);
         }
     }

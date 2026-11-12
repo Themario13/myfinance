@@ -20,7 +20,6 @@ public class QuickAddReceiver extends BroadcastReceiver {
             String input = cs == null ? "" : cs.toString();
             msg = QuickStore.record(c, type, input);
             if (msg == null) msg = "No he entendido el importe. Prueba así: 12,50 mercadona";
-            else msg = msg + "\nSe clasificará solo al abrir la app.";
         }
         QuickStore.showNotification(c, msg);
     }

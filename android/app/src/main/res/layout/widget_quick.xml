@@ -1,62 +1,48 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/w_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
-    android:padding="14dp"
+    android:padding="16dp"
     android:background="@drawable/widget_bg">
-
-    <TextView
-        android:id="@+id/widget_title"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Mis Cuentas"
-        android:textColor="#6B7280"
-        android:textSize="12sp"
-        android:textStyle="bold" />
-
-    <TextView
-        android:id="@+id/widget_summary"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:layout_marginTop="4dp"
-        android:text="Abre la app para ver tu resumen"
-        android:textColor="#14171F"
-        android:textSize="15sp"
-        android:textStyle="bold"
-        android:maxLines="3"
-        android:ellipsize="end" />
-
-    <LinearLayout
-        android:layout_width="match_parent"
-        android:layout_height="44dp"
-        android:layout_marginTop="8dp"
-        android:orientation="horizontal">
-
-        <TextView
-            android:id="@+id/widget_exp"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:layout_marginEnd="6dp"
-            android:gravity="center"
-            android:text="− Gasto"
-            android:textColor="#FFFFFF"
-            android:textSize="15sp"
-            android:textStyle="bold"
-            android:background="@drawable/widget_btn_exp" />
-
-        <TextView
-            android:id="@+id/widget_inc"
-            android:layout_width="0dp"
-            android:layout_height="match_parent"
-            android:layout_weight="1"
-            android:gravity="center"
-            android:text="+ Ingreso"
-            android:textColor="#FFFFFF"
-            android:textSize="15sp"
-            android:textStyle="bold"
-            android:background="@drawable/widget_btn_inc" />
+    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:text="MIS CUENTAS" android:textColor="#3EE6A8" android:textSize="10.5sp" android:textStyle="bold" android:letterSpacing="0.08" />
+    <TextView android:id="@+id/w_main" android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:layout_marginTop="4dp" android:text="Abre la app" android:textColor="#EEF1F4" android:textSize="20sp" android:textStyle="bold"
+        android:maxLines="1" android:ellipsize="end" />
+    <TextView android:id="@+id/w_sub" android:layout_width="match_parent" android:layout_height="0dp" android:layout_weight="1"
+        android:layout_marginTop="2dp" android:textColor="#8B93A1" android:textSize="12.5sp" android:maxLines="2" android:ellipsize="end" />
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="vertical" android:layout_marginTop="6dp" android:layout_marginBottom="10dp">
+        <ProgressBar
+            android:id="@+id/w_bar_ok"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="6dp"
+            android:max="100"
+            android:progress="0"
+            android:visibility="visible"
+            android:progressDrawable="@drawable/prog_ok" />
+        <ProgressBar
+            android:id="@+id/w_bar_warn"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="6dp"
+            android:max="100"
+            android:progress="0"
+            android:visibility="gone"
+            android:progressDrawable="@drawable/prog_warn" />
+        <ProgressBar
+            android:id="@+id/w_bar_bad"
+            style="?android:attr/progressBarStyleHorizontal"
+            android:layout_width="match_parent"
+            android:layout_height="6dp"
+            android:max="100"
+            android:progress="0"
+            android:visibility="gone"
+            android:progressDrawable="@drawable/prog_bad" />
     </LinearLayout>
+    <TextView android:id="@+id/w_add" android:layout_width="match_parent" android:layout_height="44dp"
+        android:gravity="center" android:text="+ Añadir gasto" android:textColor="#0B1712" android:textSize="15sp" android:textStyle="bold"
+        android:background="@drawable/widget_btn_exp" />
 </LinearLayout>

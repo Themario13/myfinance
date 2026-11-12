@@ -42,11 +42,21 @@ public class QuickAddPlugin extends Plugin {
     @PluginMethod
     public void updateSummary(PluginCall call) {
         Context c = getContext();
-        String text = call.getString("text", "");
-        String widget = call.getString("widget", text);
-        QuickStore.prefs(c).edit().putString("summary", text).putString("widget", widget).apply();
+        Double can = call.getDouble("canSpend", 0.0);
+        Double spendable = call.getDouble("spendable", 0.0);
+        Double goal = call.getDouble("goal", 0.0);
+        QuickStore.prefs(c).edit()
+                .putString("summary", call.getString("text", ""))
+                .putBoolean("hasPlan", Boolean.TRUE.equals(call.getBoolean("hasPlan", false)))
+                .putString("ym", call.getString("ym", ""))
+                .putString("canSpend", String.valueOf(can == null ? 0 : can))
+                .putString("spendable", String.valueOf(spendable == null ? 0 : spendable))
+                .putString("goal", String.valueOf(goal == null ? 0 : goal))
+                .putString("goalName", call.getString("goalName", "Ahorro"))
+                .apply();
         if (QuickStore.notifEnabled(c)) QuickStore.showNotification(c, null);
         QuickStore.updateWidgets(c);
+        QuickStore.checkAlert(c);
         call.resolve();
     }
 
