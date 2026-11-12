@@ -320,12 +320,13 @@ function learn(tx,newCat){
 const txOfMonth=ym=>S.txs.filter(t=>ymOf(t.date)===ym);
 const isSaving=t=>!!cat(t.cat).saving, isRefund=t=>t.type==="inc"&&(!!cat(t.cat).refund||cat(t.cat).type==="exp");
 /** exp = gasto neto (descontando lo que te devuelven los amigos); los traspasos a ahorro no son gasto. */
-function sums(ym){let inc=0,gross=0,ref=0,sav=0;for(const t of txOfMonth(ym)){if(isRefund(t))ref+=t.amount;else if(t.type==="inc")inc+=t.amount;else if(isSaving(t))sav+=t.amount;else gross+=t.amount}const exp=gross-ref;return{inc,exp,gross,ref,sav,bal:inc-exp}}
-function byCat(ym){const m={};let ref=0;for(const t of txOfMonth(ym)){if(isRefund(t)&&cat(t.cat).type==="exp")m[t.cat]=(m[t.cat]||0)-t.amount;else if(isRefund(t))ref+=t.amount;else if(t.type==="exp"&&!isSaving(t))m[t.cat]=(m[t.cat]||0)+t.amount}
+function sums(ym){let inc=0,gross=0,ref=0,sav=0,gs=0;for(const t of txOfMonth(ym)){if(isRefund(t))ref+=t.amount;else if(t.type==="inc")inc+=t.amount;else if(t.goal)gs+=t.amount;else if(isSaving(t))sav+=t.amount;else gross+=t.amount}const exp=gross-ref;return{inc,exp,gross,ref,sav,gs,bal:inc-exp}}
+function byCat(ym,varOnly){const m={};let ref=0;for(const t of txOfMonth(ym)){if(varOnly&&t.fixedId)continue;if(isRefund(t)&&cat(t.cat).type==="exp")m[t.cat]=(m[t.cat]||0)-t.amount;else if(isRefund(t))ref+=t.amount;else if(t.type==="exp"&&!isSaving(t)&&!t.goal)m[t.cat]=(m[t.cat]||0)+t.amount}
   // las devoluciones de amigos se descuentan de «comer fuera y ocio» (casi siempre son cenas a medias)
   if(ref&&m.ocio){const d=Math.min(m.ocio,ref);m.ocio-=d;ref-=d;if(m.ocio<=0.005)delete m.ocio}
   return Object.entries(m).filter(x=>x[1]>0.005).sort((a,b)=>b[1]-a[1])}
-const spentCat=(ym,id)=>{const e=byCat(ym).find(x=>x[0]===id);return e?e[1]:0};
+/** Gasto del día a día en una categoría (sin los fijos, que ya van aparte del límite). */
+const spentCat=(ym,id)=>{const e=byCat(ym,true).find(x=>x[0]===id);return e?e[1]:0};
 function fixedDue(f,ym){return (f.freq||"m")==="m"||+(f.month||1)===+ym.slice(5,7)}
 const fixedLinked=(f,ym)=>S.txs.filter(t=>t.fixedId===f.id&&ymOf(t.date)===ym);
 const fixedSum=(f,ym)=>fixedLinked(f,ym).reduce((a,t)=>a+t.amount,0);
@@ -356,7 +357,7 @@ function histMonths(){const cur=curYM();return[...new Set(S.txs.filter(t=>t.src!
 function catStats(){
   const ms=histMonths(),sum={},gross={},cnt={},merch={};
   for(const m of ms)for(const t of txOfMonth(m)){
-    if(t.fixedId||t.amount>300)continue;
+    if(t.fixedId||t.goal||t.amount>300)continue;
     if(t.type==="exp"&&!isSaving(t)){sum[t.cat]=(sum[t.cat]||0)+t.amount;gross[t.cat]=(gross[t.cat]||0)+t.amount;cnt[t.cat]=(cnt[t.cat]||0)+1;
       const k=prettify(t.note||"");if(k){const mk=t.cat+"|"+k;merch[mk]=(merch[mk]||0)+t.amount}}
     else if(isRefund(t)){const c=cat(t.cat).type==="exp"?t.cat:"ocio";sum[c]=(sum[c]||0)-t.amount}
@@ -411,6 +412,15 @@ function relinkFixed(){
   for(const t of S.txs)if(t.fixedId&&t.src!=="auto")touched.add(t.fixedId+"|"+ymOf(t.date));
   S.txs=S.txs.filter(t=>!(t.src==="auto"&&!t.ext&&t.created===0&&touched.has(t.fixedId+"|"+ymOf(t.date))));
 }
+/** Hucha del objetivo: lo ahorrado desde que empezó, lo usado en él y lo previsto este mes. */
+function hucha(){
+  const start=S.settings.goalStart||(curYM()+"-01"),cur=curYM();let saved=+S.settings.goalInitial||0;const hist=[];
+  for(let m=start.slice(0,7);m<cur;m=addMonths(m,1)){const x=sums(m);const v=x.inc-x.exp;saved+=v;hist.push([m,v])}
+  const P=plan(cur);const thisMonth=P.has?P.income-P.exp-P.fixPending:sums(cur).inc-sums(cur).exp;
+  const used=S.txs.filter(t=>t.type==="exp"&&t.goal&&t.date>=start).reduce((a,t)=>a+t.amount,0);
+  const target=+S.settings.goalTarget||0;
+  return{start,saved,thisMonth,used,avail:saved-used,target,hist,withMonth:saved+Math.max(0,thisMonth)};
+}
 function applyAutoLimits(){
   if(S.settings.autoLimits===false||!S.settings.personal)return;
   const {lims}=suggestLimits(budgetBase(),S.settings.lockedLims||{});
@@ -440,7 +450,7 @@ function tips(){
   for(const c of catsOf("exp")){const lim=+c.budget||0;if(!lim)continue;const sp=spentCat(ym,c.id);const pace=sp/lim,time=day/dim;
     if(sp<lim&&pace>time+0.25&&pace>0.5)out.push({save:0,icon:"⏱️",title:`Vas rápido en ${c.name}`,text:`Llevas el ${Math.round(pace*100)} % del límite y solo ha pasado el ${Math.round(time*100)} % del mes. Te quedan ${money0(lim-sp)} hasta fin de mes (${money0((lim-sp)/(dim-day+1))}/día).`,now:true})}
   // gastos grandes recientes
-  const big=S.txs.filter(t=>t.type==="exp"&&!t.fixedId&&!isSaving(t)&&t.amount>=100&&Date.now()-new Date(t.date).getTime()<45*864e5).sort((a,b)=>b.amount-a.amount).slice(0,3);
+  const big=S.txs.filter(t=>t.type==="exp"&&!t.fixedId&&!t.goal&&!isSaving(t)&&t.amount>=100&&Date.now()-new Date(t.date).getTime()<45*864e5).sort((a,b)=>b.amount-a.amount).slice(0,3);
   if(big.length)out.push({save:0,icon:"💸",title:"Gastos grandes del último mes y medio",text:big.map(t=>`${esc(t.note||cat(t.cat).name)} ${money0(t.amount)} (${new Date(t.date).toLocaleDateString("es-ES",{day:"numeric",month:"short"})})`).join(" · ")+". Antes de un gasto de más de 100 €, espera 48 horas: muchas veces se te pasan las ganas."});
   out.sort((a,b)=>(b.now?1:0)-(a.now?1:0)||b.save-a.save);
   return out;
@@ -525,12 +535,12 @@ function bars6(){
 }
 function txRow(t){
   const c=cat(t.cat);
-  return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(t.note||c.name)}</div><div class="s">${esc(c.name)}${t.src==="bank"||t.src==="import"?'<span class="tag bank">banco</span>':""}${t.ext?'<span class="tag">otra cuenta</span>':""}${t.src==="auto"?'<span class="tag auto">auto</span>':""}${t.review?'<span class="tag rev">revisar</span>':""}</div></div><div class="amt num ${t.type}">${t.type==="exp"?"−":"+"}${esc(money(t.amount))}</div></div>`;
+  return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(t.note||c.name)}</div><div class="s">${esc(c.name)}${t.src==="bank"||t.src==="import"?'<span class="tag bank">banco</span>':""}${t.ext?'<span class="tag">otra cuenta</span>':""}${t.goal?'<span class="tag auto">🏠 objetivo</span>':""}${t.src==="auto"?'<span class="tag auto">auto</span>':""}${t.review?'<span class="tag rev">revisar</span>':""}</div></div><div class="amt num ${t.type}">${t.type==="exp"?"−":"+"}${esc(money(t.amount))}</div></div>`;
 }
 function bindRows(root){root.querySelectorAll("[data-tx]").forEach(r=>r.onclick=()=>{const t=S.txs.find(x=>x.id===r.dataset.tx);if(t)openTx(t)})}
 function renderHome(){
   const P=plan(month),isCur=month===curYM(),past=month<curYM();
-  const goal=P.goal;
+  const goal=P.goal,gName=S.settings.goalName||"Ahorro";
   let lbl,big,sub,pct,bad=false;
   if(!P.has){
     lbl="Este mes";big=money0(-P.exp).replace("-","−");sub="Configura tu nómina para ver cuánto puedes gastar";pct=0;
@@ -547,27 +557,20 @@ function renderHome(){
     pct=P.spendable>0?Math.min(100,Math.max(0,(P.spendable-P.canSpend)/P.spendable*100)):100;
   }
   const ringC=bad||pct>=100?"var(--exp)":pct>=85?"var(--warn)":"var(--mint)";
-  // avisos
+  // avisos (solo lo importante)
   const al=[];
-  const review=S.txs.filter(t=>t.review).length;
-  if(review)al.push(["w","🏷️",`${review} movimiento${review>1?"s":""} sin categoría clara. <span class="link" data-act="review">Revisar</span>`]);
-  for(const c of catsOf("exp")){if(!(+c.budget))continue;const sp=spentCat(month,c.id);
-    if(sp>c.budget)al.push(["e",c.icon,`Te has pasado en <b>${esc(c.name)}</b>: ${money0(sp)} de ${money0(c.budget)}`]);
-    else if(isCur&&sp>=c.budget*.85)al.push(["w",c.icon,`Casi al límite en <b>${esc(c.name)}</b>: ${money0(sp)} de ${money0(c.budget)}`]);}
-  if(isCur&&P.has){
-    const d=new Date().getDate(),prev=addMonths(month,-1);
-    const prevSoFar=txOfMonth(prev).filter(t=>t.type==="exp"&&!t.fixedId&&+t.date.slice(8)<=d).reduce((a,t)=>a+t.amount,0);
-    const nowVar=txOfMonth(month).filter(t=>t.type==="exp"&&!t.fixedId).reduce((a,t)=>a+t.amount,0);
-    if(prevSoFar>0&&nowVar>0){const diff=nowVar-prevSoFar;if(Math.abs(diff)>=10)al.push(diff>0?["w","📈",`Llevas <b>${money0(diff)} más</b> en el día a día que el mes pasado a estas alturas`]:["g","📉",`Llevas <b>${money0(-diff)} menos</b> que el mes pasado a estas alturas. ¡Bien!`])}
-  }
-  if(S.bank.sessionId&&S.bank.validUntil&&new Date(S.bank.validUntil)-Date.now()<7*864e5)al.push(["e","🔑",`El permiso de tu banco caduca pronto. <span class="link" data-act="ajustes">Renovar</span>`]);
   if(!S.settings.onboarded)al.push(["g","✨",`Configura tu plan en 1 minuto: nómina, fijos y ahorro. <span class="link" data-act="wizard">Empezar</span>`]);
   else if(!S.settings.personal)al.push(["g","📊",`He preparado tus fijos y límites con tu extracto real. <span class="link" data-act="wizard">Revisar y aplicar</span>`]);
   if(!S.settings.csvDate&&!S.bank.sessionId)al.push(["","📥",`Importa el extracto de imagin (CSV) para tener tu historial y tu saldo real. <span class="link" data-act="csv">Importar</span>`]);
-  const tm=totalMoney();
-  const bc=byCat(month);
+  for(const r of fixedRises())al.push(["w","📈",`<b>${esc(r.f.name)}</b> ha subido: ${money(r.now)} en ${esc(monthName(r.ym).split(" ")[0])} (sueles pagar ${money(r.f.amount)}). <span class="link" data-rise="${r.f.id}|${r.ym}|${r.now}">Actualizar importe</span> · <span class="link" data-rise-no="${r.f.id}|${r.ym}">Ignorar</span>`]);
+  for(const c of catsOf("exp")){if(!(+c.budget)||!isCur)continue;const sp=spentCat(month,c.id);
+    if(sp>c.budget)al.push(["e",c.icon,`Te has pasado en <b>${esc(c.name)}</b>: ${money0(sp)} de ${money0(c.budget)}`]);}
+  const review=S.txs.filter(t=>t.review).length;
+  if(review)al.push(["","🏷️",`${review} movimiento${review>1?"s":""} sin categoría clara. <span class="link" data-act="review">Revisar</span>`]);
+  if(S.bank.sessionId&&S.bank.validUntil&&new Date(S.bank.validUntil)-Date.now()<7*864e5)al.push(["e","🔑",`El permiso de tu banco caduca pronto. <span class="link" data-act="ajustes">Renovar</span>`]);
+  const tm=totalMoney(),H=hucha();
   const lims=catsOf("exp").filter(c=>+c.budget>0);
-  const recent=txOfMonth(month).sort((a,b)=>b.date.localeCompare(a.date)||(b.ts||0)-(a.ts||0)).slice(0,5);
+  const T=S.settings.personal&&isCur?tips():[];
   $("#main").innerHTML=`
   <div class="card hero ${bad?"bad":""}">
     <div class="hero-top">
@@ -584,26 +587,59 @@ function renderHome(){
       <div class="pill"><small>${goal?"Ahorro":"Fijos pend."}</small><b class="num">${goal?esc(money0(past?P.inc-P.exp:Math.max(0,P.savedProj))):esc(money0(P.fixPending))}</b></div>
     </div>
   </div>
+  ${isCur?closingCard():""}
   ${al.length?`<div class="card"><h2>Avisos</h2>${al.map(a=>`<div class="alert ${a[0]}"><span class="e1">${a[1]}</span><div>${a[2]}</div></div>`).join("")}</div>`:""}
-  <div class="card">
-    <h2>Mi dinero <a data-act="balance">${tm?"Ajustar":"Poner saldo"}</a></h2>
-    ${tm?`<div style="font-size:30px;font-weight:800;letter-spacing:-.03em" class="num">${esc(money(tm.v))}</div><div class="note">${tm.src==="bank"?"Saldo de tu banco":"En tu cuenta, según tus anotaciones"}${S.bank.lastSync&&tm.src==="bank"?" · "+new Date(S.bank.lastSync).toLocaleString("es-ES",{day:"numeric",month:"short",hour:"2-digit",minute:"2-digit"}):""}</div>`
-      :`<div class="note">Dime cuánto tienes ahora en la cuenta y lo mantengo al día con cada gasto.</div>`}
-    ${goal?`<div style="margin-top:14px"><div class="mini"><span>🏠 ${esc(S.settings.goalName||"Ahorro")} este mes</span><b class="num">${esc(money0(Math.max(0,past?P.inc-P.exp:P.savedProj)))} / ${esc(money0(goal))}</b></div><div class="bar thin"><i style="width:${Math.max(0,Math.min(100,(past?P.inc-P.exp:P.savedProj)/goal*100))}%;${bad?"background:var(--exp)":""}"></i></div></div>`:""}
-  </div>
+  ${goal||H.saved||H.used?`<div class="card hucha">
+    <h2>🏠 ${esc(gName)} <a data-act="goal">Editar</a></h2>
+    <div class="mini" style="align-items:flex-end"><div><div style="font-size:30px;font-weight:800;letter-spacing:-.03em;color:${H.avail<0?"var(--exp)":"var(--text)"}" class="num">${esc(money0(H.avail))}</div><div class="note">en la hucha${H.thisMonth>0&&isCur?` · <span class="inc">+${esc(money0(H.thisMonth))}</span> previstos este mes`:""}</div></div>
+    ${H.target?`<b class="num">${Math.round(Math.max(0,H.withMonth)/H.target*100)}%<span class="muted" style="font-weight:500"> de ${esc(money0(H.target))}</span></b>`:""}</div>
+    ${H.target?`<div class="bar thin"><i style="width:${Math.max(0,Math.min(100,H.withMonth/H.target*100))}%"></i></div>`:""}
+    <div class="mini" style="margin-top:10px"><span>Ahorrado desde ${esc(new Date(H.start).toLocaleDateString("es-ES",{month:"short",year:"numeric"}))}</span><b class="num">${esc(money0(H.saved))}</b></div>
+    ${H.used?`<div class="mini"><span>Usado en ${esc(gName.replace(/^ahorro (para )?/i,""))}</span><b class="num">−${esc(money0(H.used))}</b></div>`:""}
+    ${tm?`<div class="mini" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)"><span>🏦 En tu cuenta</span><span><b class="num">${esc(money(tm.v))}</b> · <a class="link" data-act="balance">Ajustar</a></span></div>`:`<div class="note" style="margin-top:8px"><span class="link" data-act="balance">Pon tu saldo actual</span> para tenerlo siempre al día.</div>`}
+  </div>`:`<div class="card"><h2>🏦 Mi dinero <a data-act="balance">${tm?"Ajustar":"Poner saldo"}</a></h2>${tm?`<div style="font-size:30px;font-weight:800" class="num">${esc(money(tm.v))}</div>`:`<div class="note">Dime cuánto tienes en la cuenta.</div>`}<div class="note" style="margin-top:6px"><span class="link" data-act="goal">Ponte un objetivo de ahorro</span></div></div>`}
   ${lims.length?`<div class="card"><h2>Tus límites <a data-act="limits">Editar</a></h2>${lims.map(c=>{const v=spentCat(month,c.id),p=Math.min(100,v/c.budget*100);const col=v>c.budget?"var(--exp)":p>=85?"var(--warn)":c.color;return `<div class="lim"><div class="mini"><span>${c.icon} ${esc(c.name)}</span><span class="num"><b>${esc(money0(v))}</b> / ${esc(money0(c.budget))}</span></div><div class="bar thin"><i style="width:${p}%;background:${col}"></i></div></div>`}).join("")}</div>`:""}
-  ${(()=>{const T=S.settings.personal?tips():[];return T.length?`<div class="card"><h2>💡 Cómo ahorrar más ${T.length>2?`<a data-act="tips">Ver ${T.length}</a>`:""}</h2>${T.slice(0,2).map(tipHTML).join("")}</div>`:""})()}
-  <div class="card"><h2>¿En qué se va?</h2>
-    ${P.ref?`<div class="note" style="margin:-6px 0 12px">🤝 Te han devuelto <b>${esc(money0(P.ref))}</b> por Bizum; ya está descontado de «Comer fuera y ocio».</div>`:""}
-    ${bc.length?`<div class="donut-wrap">${donut(bc,bc.reduce((a,x)=>a+x[1],0))}<div class="legend">${bc.slice(0,6).map(([id,v])=>`<div class="l"><i style="background:${cat(id).color}"></i><span>${esc(cat(id).name)}</span><b class="num">${esc(money0(v))}</b></div>`).join("")}${bc.length>6?`<div class="l muted"><i></i><span>+${bc.length-6} más</span></div>`:""}</div></div>`
-    :`<div class="empty">Aún no hay gastos este mes.<br>Pulsa <b>+</b> para anotar el primero.</div>`}
-  </div>
-  ${S.fixed.length?`<div class="card"><h2>Fijos del mes <a data-act="fijos">Ver todos</a></h2>${S.fixed.filter(f=>fixedDue(f,month)).slice(0,7).map(f=>{const p=fixedPaid(f,month);const c=cat(f.cat);const inc=f.type==="inc";return `<div class="row"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(f.name)}</div><div class="s">Día ${f.day}${p?" · "+(inc?"cobrado":"pagado"):""}</div></div><div class="amt num">${p?`<span class="${inc?"inc":""}">✓ ${esc(money0(p.amount))}</span>`:(fixedSum(f,month)>0?`<span class="warn">${esc(money0(fixedSum(f,month)))} / ${esc(money0(f.amount))}</span>`:`<span class="muted">${f.amount?esc(money0(f.amount)):"—"}</span>`)}</div></div>`}).join("")}</div>`:""}
-  <div class="card"><h2>Últimos 6 meses</h2>${bars6()}</div>
-  <div class="card"><h2>Últimos movimientos <a data-act="movs">Ver todos</a></h2>${recent.length?recent.map(txRow).join(""):`<div class="empty">Sin movimientos este mes</div>`}</div>`;
+  ${T.length?`<div class="card"><h2>💡 Un consejo ${T.length>1?`<a data-act="tips">Ver ${T.length}</a>`:""}</h2>${tipHTML(T[0])}</div>`:""}
+  <button class="btn sec block" data-act="stats" style="margin-bottom:12px">📊 ¿En qué se me va el dinero?</button>`;
   bindRows($("#main"));
   $("#main").querySelectorAll("[data-act]").forEach(a=>a.onclick=e=>{e.stopPropagation();const x=a.dataset.act;
-    if(x==="sync")bankSync(true);else if(x==="csv")pickCSV();else if(x==="tips")openTips();else if(x==="review"){filter="review";go("movs")}else if(x==="wizard")openWizard();else if(x==="balance")openBalance();else if(x==="limits")openLimits();else go(x)});
+    if(x==="sync")bankSync(true);else if(x==="csv")pickCSV();else if(x==="tips")openTips();else if(x==="stats")openStats();else if(x==="goal")openGoal();else if(x==="closeok"){S.settings.closedSeen=addMonths(curYM(),-1);save();render()}
+    else if(x==="review"){filter="review";go("movs")}else if(x==="wizard")openWizard();else if(x==="balance")openBalance();else if(x==="limits")openLimits();else go(x)});
+  $("#main").querySelectorAll("[data-rise]").forEach(a=>a.onclick=()=>{const [id,ym,v]=a.dataset.rise.split("|");const f=S.fixed.find(x=>x.id===id);if(f){f.amount=Math.round(+v*100)/100;(S.settings.riseSeen=S.settings.riseSeen||[]).push(id+"|"+ym);applyAutoLimits();save();render();toast(`${f.name}: ahora ${money(f.amount)}`)}});
+  $("#main").querySelectorAll("[data-rise-no]").forEach(a=>a.onclick=()=>{(S.settings.riseSeen=S.settings.riseSeen||[]).push(a.dataset.riseNo);save();render()});
+}
+/** Fijos que este mes (o el pasado) han llegado bastante más caros de lo habitual. */
+function fixedRises(){
+  const out=[],seen=new Set(S.settings.riseSeen||[]);
+  for(const ym of [curYM(),addMonths(curYM(),-1)])for(const f of S.fixed){
+    if((f.type||"exp")!=="exp"||!(+f.amount)||cat(f.cat).saving||seen.has(f.id+"|"+ym))continue;
+    const real=fixedLinked(f,ym).filter(t=>t.src==="bank"||t.src==="import");if(!real.length)continue;
+    const now=real.reduce((a,t)=>a+t.amount,0);
+    if(now>f.amount*1.15&&now-f.amount>=5&&!out.some(o=>o.f===f))out.push({f,ym,now:Math.round(now*100)/100});
+  }
+  return out;
+}
+/** Tarjeta de cierre del mes anterior (los primeros días del mes). */
+function closingCard(){
+  const prev=addMonths(curYM(),-1);
+  if(new Date().getDate()>7||S.settings.closedSeen===prev||!txOfMonth(prev).length)return"";
+  const x=sums(prev),goal=+S.settings.saveGoal||0,saved=x.inc-x.exp;
+  const lims=catsOf("exp").filter(c=>+c.budget>0).map(c=>({c,v:spentCat(prev,c.id)}));
+  const ok=lims.filter(l=>l.v<=l.c.budget),over=lims.filter(l=>l.v>l.c.budget).sort((a,b)=>(b.v-b.c.budget)-(a.v-a.c.budget));
+  const win=goal?saved>=goal:saved>0;
+  return `<div class="card" style="border-color:${win?"rgba(62,230,168,.3)":"rgba(255,182,72,.3)"}"><h2>📅 Así cerraste ${esc(monthName(prev).split(" ")[0])}</h2>
+    <div style="font-size:22px;font-weight:800;letter-spacing:-.02em">${saved<0?`Gastaste ${esc(money0(-saved))} más de lo que entró`:`${win?"🎉 ":""}Ahorraste ${esc(money0(saved))}`}${goal&&saved>=0?` <span class="muted" style="font-size:15px;font-weight:600">de ${esc(money0(goal))}</span>`:""}</div>
+    ${lims.length?`<div class="note" style="margin-top:6px">Cumpliste ${ok.length} de ${lims.length} límites.${over.length?` Donde más te pasaste: <b>${esc(over[0].c.name)}</b> (+${esc(money0(over[0].v-over[0].c.budget))}).`:" ¡Todos! 👏"}</div>`:""}
+    <button class="btn sec block" data-act="closeok" style="margin-top:12px">Vale 👍</button></div>`;
+}
+function openStats(){
+  const bc=byCat(month),x=sums(month);
+  openSheet(`<h3>📊 ${esc(monthName(month))}</h3>
+    ${x.ref?`<div class="note" style="margin-bottom:12px">🤝 Te han devuelto <b>${esc(money0(x.ref))}</b> por Bizum; ya está descontado de «Comer fuera y ocio».</div>`:""}
+    ${bc.length?`<div class="donut-wrap">${donut(bc,bc.reduce((a,v)=>a+v[1],0))}<div class="legend">${bc.map(([id,v])=>`<div class="l"><i style="background:${cat(id).color}"></i><span>${esc(cat(id).name)}</span><b class="num">${esc(money0(v))}</b></div>`).join("")}</div></div>`:`<div class="empty">Sin gastos este mes</div>`}
+    ${x.gs?`<div class="note" style="margin-top:12px">🏠 Además, ${esc(money0(x.gs))} en gastos de tu objetivo (salen de la hucha).</div>`:""}
+    <h3 style="margin-top:22px;font-size:15px">Últimos 6 meses</h3>${bars6()}
+    <button class="btn sec block" style="margin-top:16px" onclick="closeSheet()">Cerrar</button>`);
 }
 
 /* ============ Movimientos ============ */
@@ -656,12 +692,13 @@ function renderAjustes(){
   <div class="card"><h2>Tu plan</h2>
     <div class="set-row tap" data-go="nomina"><div class="mid"><b>💼 Nómina</b><div class="s">${nom&&nom.amount?esc(money(nom.amount))+" · día "+nom.day:"Sin configurar"}</div></div><span class="muted">›</span></div>
     <div class="set-row tap" data-go="balance"><div class="mid"><b>🏦 Dinero en cuenta</b><div class="s">${tm?esc(money(tm.v)):"Sin poner"}</div></div><span class="muted">›</span></div>
-    <div class="set-row tap" data-go="goal"><div class="mid"><b>🏠 Ahorro al mes</b><div class="s">${S.settings.saveGoal?esc(money(S.settings.saveGoal))+" · "+esc(S.settings.goalName):"Sin objetivo"}</div></div><span class="muted">›</span></div>
+    <div class="set-row tap" data-go="goal"><div class="mid"><b>🎯 Objetivo de ahorro</b><div class="s">${S.settings.saveGoal?esc(money(S.settings.saveGoal))+" · "+esc(S.settings.goalName):"Sin objetivo"}</div></div><span class="muted">›</span></div>
     <div class="set-row tap" data-go="limits"><div class="mid"><b>🎯 Límites por categoría</b><div class="s">${catsOf("exp").filter(c=>+c.budget).length} categorías con límite</div></div><span class="muted">›</span></div>
     <button class="btn sec block" style="margin-top:10px" id="reWiz">Repetir el asistente</button>
   </div>
   <div class="card"><h2>Anotar sin abrir la app</h2>
     <div class="set-row"><div class="mid"><b>Notificación fija</b><div class="s">Tu resumen y el botón «+ Gasto». Escribe «12,50 mercadona» y listo.</div></div><button class="sw ${S.settings.notif?"on":""}" id="swNotif" ${isNative?"":"disabled"}></button></div>
+    <div class="set-row"><div class="mid"><b>Resumen del domingo</b><div class="s">Cada domingo a las 21:00, cómo te ha ido la semana.</div></div><button class="sw ${S.settings.weekly!==false?"on":""}" id="swWeek" ${isNative?"":"disabled"}></button></div>
     <div class="set-row"><div class="mid"><b>Aviso de ahorro</b><div class="s">Te llega una notificación cuando empiezas a comerte el ahorro del mes.</div></div><span class="tag auto">siempre</span></div>
     <div class="set-row"><div class="mid"><b>Widget</b><div class="s">Mantén pulsada la pantalla de inicio → Widgets → Mis Cuentas.</div></div></div>
   </div>
@@ -715,6 +752,7 @@ function renderAjustes(){
     $("#bOff").onclick=async()=>{if(await confirmBox("¿Desconectar el banco? Los movimientos ya importados se quedan.","Desconectar")){S.bank.sessionId="";S.bank.accounts=[];save();renderAjustes()}};
   }
   const sw=$("#swNotif");if(sw&&isNative)sw.onclick=async()=>{S.settings.notif=!S.settings.notif;S.settings.notifAsked=true;save();sw.classList.toggle("on",S.settings.notif);try{await QuickAdd.setNotification({enabled:S.settings.notif});pushNative()}catch(e){toast("No se pudo: "+e.message)}};
+  const sww=$("#swWeek");if(sww&&isNative)sww.onclick=()=>{S.settings.weekly=S.settings.weekly===false;save();sww.classList.toggle("on",S.settings.weekly!==false);QuickAdd.setWeekly({enabled:S.settings.weekly!==false}).catch(()=>{})};
   $("#addCat").onclick=()=>openCat({});
   document.querySelectorAll("[data-cat]").forEach(r=>r.onclick=()=>openCat(cat(r.dataset.cat)));
   document.querySelectorAll("[data-rdel]").forEach(b=>b.onclick=()=>{S.rules.splice(+b.dataset.rdel,1);save();renderAjustes()});
@@ -750,16 +788,19 @@ function openTx(t){
     el.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>{sel=b.dataset.c;el._auto=false;el.querySelectorAll("[data-c]").forEach(x=>x.classList.toggle("on",x===b))});
     el.querySelectorAll(".seg button").forEach(b=>b.classList.toggle("on",b.dataset.t===type));
     el.querySelector("#tAmt").className="amount-in num "+type;
+    el.querySelector("#tGoalRow").style.display=type==="exp"?"":"none";
   };
   openSheet(`<h3>${isNew?"Nuevo movimiento":fromBank?"Movimiento del banco":"Editar movimiento"}</h3>
    ${fromBank?"":`<div class="seg"><button data-t="exp">Gasto</button><button data-t="inc">Ingreso</button></div>`}
    <input class="amount-in num" id="tAmt" inputmode="decimal" placeholder="0,00 €" value="${amtStr(t.amount)}" ${fromBank?"readonly":""}>
    <input class="in" id="tNote" placeholder="Concepto (ej: Mercadona)" value="${esc(t.note||"")}" style="margin-top:6px">
    <div class="cats" id="tCats"></div>
+   <div class="set-row" id="tGoalRow" style="border:0;padding-top:0"><div class="mid"><b>🏠 Para ${esc((S.settings.goalName||"el objetivo").replace(/^ahorro para /i,"").replace(/^ahorro$/i,"el objetivo"))}</b><div class="s">Sale de la hucha: no cuenta como gasto del mes ni de tus límites</div></div><button class="sw ${t.goal?"on":""}" id="tGoal"></button></div>
    <label class="field"><span>Fecha</span><input class="in" type="date" id="tDate" value="${t.date||todayISO()}" ${fromBank?"readonly":""}></label>
    <button class="btn block" id="tSave">${isNew?"Guardar":"Guardar cambios"}</button>
    ${!isNew?`<button class="btn danger block" id="tDel" style="margin-top:8px">Eliminar</button>`:""}`,el=>{
     el.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{type=b.dataset.t;if(sel&&cat(sel).type!==type)sel=null;draw(el)});
+    let goalOn=!!t.goal;const gsw=el.querySelector("#tGoal");gsw.onclick=()=>{goalOn=!goalOn;gsw.classList.toggle("on",goalOn)};
     draw(el);
     const amt=el.querySelector("#tAmt"),note=el.querySelector("#tNote");
     if(isNew)setTimeout(()=>amt.focus(),300);
@@ -768,10 +809,11 @@ function openTx(t){
       const a=parseAmt(amt.value);if(!(a>0)){toast("Pon un importe");amt.focus();return}
       if(!sel)sel=classify(note.value,type).cat;
       const prevCat=t.cat;
-      if(isNew){S.txs.push({id:uid(),type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||todayISO(),src:"manual",ts:Date.now(),created:Date.now()})}
-      else{const x=S.txs.find(y=>y.id===t.id);Object.assign(x,{type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||x.date,review:false});
+      const g=type==="exp"&&goalOn?true:undefined;
+      if(isNew){S.txs.push({id:uid(),type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||todayISO(),src:"manual",ts:Date.now(),created:Date.now(),goal:g})}
+      else{const x=S.txs.find(y=>y.id===t.id);Object.assign(x,{type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||x.date,review:false,goal:g});
         if(prevCat!==sel){const r=learn(x,sel);if(r)toast(`Aprendido: «${r.key}» → ${cat(sel).name}${r.n?` (+${r.n})`:""}`)}}
-      save();closeSheet();render();if(isNew)toast(type==="exp"?"Gasto anotado":"Ingreso anotado");
+      save();closeSheet();render();if(isNew)toast(g?"Anotado como gasto del objetivo 🏠":type==="exp"?"Gasto anotado":"Ingreso anotado");
     };
     const del=el.querySelector("#tDel");if(del)del.onclick=async()=>{closeSheet(true);if(await confirmBox("¿Eliminar este movimiento?","Eliminar")){S.txs=S.txs.filter(x=>x.id!==t.id);save();render()}};
   });
@@ -817,15 +859,27 @@ function openBalance(){
   });
 }
 function openGoal(){
-  const P=plan(curYM());
-  openSheet(`<h3>Ahorro al mes</h3>
-   <div class="note" style="margin-bottom:10px">Lo que quieres apartar cada mes. Si gastas tanto que no llegas, te aviso con una notificación.</div>
-   <label class="field"><span>Para qué</span><input class="in" id="gName" value="${esc(S.settings.goalName)}"></label>
-   <label class="field"><span>Cantidad al mes</span><input class="in num" id="gAmt" inputmode="decimal" value="${amtStr(S.settings.saveGoal)}" placeholder="0 €"></label>
+  const P=plan(curYM()),H=hucha(),hist=S.settings.goalHistory||[];
+  openSheet(`<h3>🎯 Tu objetivo</h3>
+   <label class="field"><span>¿Para qué ahorras?</span><input class="in" id="gName" value="${esc(S.settings.goalName)}" placeholder="Ej: Ahorro para el piso"></label>
+   <div class="grid2"><label class="field"><span>Ahorro al mes</span><input class="in num" id="gAmt" inputmode="decimal" value="${amtStr(S.settings.saveGoal)}" placeholder="0 €"></label>
+   <label class="field"><span>Meta total (opcional)</span><input class="in num" id="gTot" inputmode="decimal" value="${amtStr(S.settings.goalTarget)}" placeholder="Ej: 5000 €"></label></div>
+   <label class="field"><span>Ya tenía ahorrado para esto</span><input class="in num" id="gIni" inputmode="decimal" value="${amtStr(S.settings.goalInitial)}" placeholder="0 €"></label>
    <div class="note" id="gHint"></div>
-   <button class="btn block" id="gSave" style="margin-top:12px">Guardar</button>`,el=>{
-    const a=el.querySelector("#gAmt");const hint=()=>{const g=parseAmt(a.value);const free=P.income-P.fixTotal;el.querySelector("#gHint").innerHTML=P.income?`Con tu nómina de <b>${money0(P.income)}</b> y <b>${money0(P.fixTotal)}</b> en fijos, te quedarían <b>${money0(free-g)}</b> al mes para el día a día (${money0((free-g)/30)}/día).`:""};a.oninput=hint;hint();
-    el.querySelector("#gSave").onclick=()=>{S.settings.goalName=el.querySelector("#gName").value.trim()||"Ahorro";S.settings.saveGoal=parseAmt(a.value);applyAutoLimits();save();closeSheet();render();toast("Ahorro y límites actualizados")};
+   <button class="btn block" id="gSave" style="margin-top:12px">Guardar</button>
+   <div class="card" style="margin:16px 0 0;background:var(--card2)"><h2>Hucha actual</h2>
+     <div class="mini"><span>Desde</span><b>${esc(new Date(H.start).toLocaleDateString("es-ES",{day:"numeric",month:"long",year:"numeric"}))}</b></div>
+     <div class="mini"><span>Ahorrado</span><b class="num">${esc(money0(H.saved))}</b></div>
+     <div class="mini"><span>Usado en el objetivo</span><b class="num">${esc(money0(H.used))}</b></div>
+     <button class="btn sec block" id="gNew" style="margin-top:12px">Empezar un objetivo nuevo</button>
+     <div class="note" style="margin-top:6px">Guarda este objetivo en el historial y pone la hucha a cero desde hoy.</div></div>
+   ${hist.length?`<div class="card" style="margin:12px 0 0;background:var(--card2)"><h2>Objetivos anteriores</h2>${hist.slice().reverse().map(h=>`<div class="mini" style="padding:4px 0"><span>${esc(h.name)} <span class="muted">(${esc(new Date(h.start).toLocaleDateString("es-ES",{month:"short",year:"2-digit"}))} – ${esc(new Date(h.end).toLocaleDateString("es-ES",{month:"short",year:"2-digit"}))})</span></span><b class="num">${esc(money0(h.saved))}</b></div>`).join("")}</div>`:""}`,el=>{
+    const a=el.querySelector("#gAmt");const hint=()=>{const g=parseAmt(a.value);const base=budgetBase()+(+S.settings.saveGoal||0);el.querySelector("#gHint").innerHTML=P.income?`Te quedarían <b>${money0(base-g)}</b> al mes para el día a día (${money0((base-g)/30)}/día). Tus límites se reparten solos con esa cantidad.`:""};a.oninput=hint;hint();
+    const read=()=>{S.settings.goalName=el.querySelector("#gName").value.trim()||"Ahorro";S.settings.saveGoal=parseAmt(a.value);S.settings.goalTarget=parseAmt(el.querySelector("#gTot").value);S.settings.goalInitial=parseAmt(el.querySelector("#gIni").value);if(!S.settings.goalStart)S.settings.goalStart=curYM()+"-01"};
+    el.querySelector("#gSave").onclick=()=>{read();applyAutoLimits();save();closeSheet();render();toast("Objetivo guardado")};
+    el.querySelector("#gNew").onclick=async()=>{read();const old={name:S.settings.goalName,start:H.start,end:todayISO(),saved:H.saved,used:H.used};closeSheet(true);
+      if(await confirmBox(`¿Cerrar «${old.name}» con ${money0(H.saved)} ahorrados y empezar uno nuevo desde hoy?`,"Empezar de nuevo")){
+        (S.settings.goalHistory=S.settings.goalHistory||[]).push(old);S.settings.goalStart=todayISO();S.settings.goalInitial=0;S.settings.goalTarget=0;S.settings.goalName="Nuevo objetivo";save();render();openGoal();toast("Hucha a cero. Ponle nombre a tu nuevo objetivo")}};
   });
 }
 function openLimits(){
@@ -932,7 +986,7 @@ function openWizard(){
     {const ym=curYM(),d=new Date().getDate();
      for(const f of S.fixed){if(!(+f.amount)||!fixedDue(f,ym)||fixedPaid(f,ym))continue;const day=Math.min(+f.day||1,daysIn(ym));
        if(day<=d)S.txs.push({id:uid(),type:f.type||"exp",amount:+f.amount,cat:f.cat,note:f.name,date:`${ym}-${pad(day)}`,fixedId:f.id,src:"auto",ts:Date.now(),created:0,ext:!!f.ext||undefined})}}
-    S.settings.saveGoal=+W.goal||0;
+    S.settings.saveGoal=+W.goal||0;S.settings.goalName=W.goalName||S.settings.goalName;if(!S.settings.goalStart)S.settings.goalStart=curYM()+"-01";
     if(W.limState){for(const c of catsOf("exp")){if(!c.saving)c.budget=W.limState.lims[c.id]||0}S.settings.lockedLims=W.limState.locks;S.settings.autoLimits=true}
     S.settings.onboarded=true;S.settings.personal=1;relinkFixed();
     const wn=el.querySelector("#wNotif");
@@ -994,11 +1048,22 @@ const plug=n=>isNative?(Cap.Plugins&&Cap.Plugins[n])||(Cap.registerPlugin&&Cap.r
 const QuickAdd=plug("QuickAdd"),AppP=plug("App"),BrowserP=plug("Browser");
 const REDIRECT_DEFAULT="__REDIRECT_URL__";
 let pushT;
+const mondayISO=()=>{const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));return iso(d)};
+/** Lo gastado esta semana (día a día, neto de devoluciones) y cómo van tus límites. */
+function weekData(){
+  const start=mondayISO();let spent=0;
+  for(const t of S.txs){if(t.date<start||t.fixedId||t.goal||isSaving(t))continue;if(t.type==="exp")spent+=t.amount;else if(isRefund(t))spent-=t.amount}
+  const ym=curYM(),lims=catsOf("exp").filter(c=>+c.budget>0).map(c=>({c,left:c.budget-spentCat(ym,c.id)}));
+  const tight=lims.filter(l=>l.left<l.c.budget*0.25).sort((a,b)=>a.left-b.left).slice(0,2);
+  const text=tight.length?tight.map(l=>l.left<0?`Te has pasado en ${l.c.name.toLowerCase()} (${money0(-l.left)}).`:`Ojo con ${l.c.name.toLowerCase()}: te quedan ${money0(l.left)}.`).join(" "):(lims.length?"Vas bien en todos tus límites 👍":"");
+  return{start,spent:Math.max(0,spent),text};
+}
 function pushNative(){
   if(!QuickAdd)return;clearTimeout(pushT);
   pushT=setTimeout(()=>{
     const ym=curYM(),P=plan(ym);
-    QuickAdd.updateSummary({ym,hasPlan:P.has,canSpend:+P.canSpend.toFixed(2),spendable:+P.spendable.toFixed(2),goal:+P.goal.toFixed(2),goalName:S.settings.goalName||"Ahorro",
+    const wk=weekData();
+    QuickAdd.updateSummary({weekStart:wk.start,weekSpent:+wk.spent.toFixed(2),weekCats:wk.text,ym,hasPlan:P.has,canSpend:+P.canSpend.toFixed(2),spendable:+P.spendable.toFixed(2),goal:+P.goal.toFixed(2),goalName:S.settings.goalName||"Ahorro",
       text:P.has?"":`Este mes llevas ${money0(P.exp)} gastados`}).catch(()=>{});
   },300);
 }

@@ -1,5 +1,6 @@
 package com.mario.miscuentas;
 
+import android.app.AlarmManager;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -29,6 +30,8 @@ public class QuickStore {
     static final String CHANNEL_ALERT = "alerts_v1";
     static final int NOTIF_ID = 4242;
     static final int ALERT_ID = 4243;
+    static final int WEEKLY_ID = 4244;
+    static final String CHANNEL_WEEKLY = "weekly_v1";
     static final String KEY_TEXT = "quick_text";
     static final String ACTION_ADD = "com.mario.miscuentas.QUICK_ADD";
     static final int MINT = 0xFF3EE6A8;
@@ -146,6 +149,9 @@ public class QuickStore {
                 can += "inc".equals(type) ? amount : -amount;
                 e.putString("canSpend", String.valueOf(can));
             }
+            if (!"inc".equals(type) && mondayISO().equals(p.getString("weekStart", ""))) {
+                e.putString("weekSpent", String.valueOf(getD(p, "weekSpent") + amount));
+            }
             e.apply();
         } catch (JSONException ignored) {
         }
@@ -181,6 +187,9 @@ public class QuickStore {
             ch.setSound(null, null);
             ch.enableVibration(false);
             nm.createNotificationChannel(ch);
+            NotificationChannel wk = new NotificationChannel(CHANNEL_WEEKLY, "Resumen del domingo", NotificationManager.IMPORTANCE_DEFAULT);
+            wk.setDescription("Cada domingo por la noche, cómo te ha ido la semana");
+            nm.createNotificationChannel(wk);
             NotificationChannel al = new NotificationChannel(CHANNEL_ALERT, "Avisos de ahorro", NotificationManager.IMPORTANCE_HIGH);
             al.setDescription("Te avisa cuando empiezas a comerte el ahorro del mes");
             nm.createNotificationChannel(al);
@@ -291,6 +300,64 @@ public class QuickStore {
                 .build();
         try {
             NotificationManagerCompat.from(c).notify(ALERT_ID, n);
+        } catch (SecurityException ignored) {
+        }
+    }
+
+    static String mondayISO() {
+        Calendar cal = Calendar.getInstance();
+        int dow = cal.get(Calendar.DAY_OF_WEEK); // domingo = 1
+        cal.add(Calendar.DAY_OF_MONTH, -((dow + 5) % 7));
+        return String.format(Locale.US, "%04d-%02d-%02d", cal.get(Calendar.YEAR), cal.get(Calendar.MONTH) + 1, cal.get(Calendar.DAY_OF_MONTH));
+    }
+
+    /** Programa el próximo domingo a las 21:00. */
+    static void scheduleWeekly(Context c) {
+        AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+        Calendar cal = Calendar.getInstance();
+        int dow = cal.get(Calendar.DAY_OF_WEEK);
+        cal.add(Calendar.DAY_OF_MONTH, (Calendar.SUNDAY - dow + 7) % 7);
+        cal.set(Calendar.HOUR_OF_DAY, 21);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        if (cal.getTimeInMillis() <= System.currentTimeMillis() + 60000) cal.add(Calendar.DAY_OF_MONTH, 7);
+        Intent i = new Intent(c, WeeklyReceiver.class);
+        PendingIntent pi = PendingIntent.getBroadcast(c, 301, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi);
+    }
+
+    /** Notificación del domingo: lo gastado esta semana, lo que queda y cómo van los límites. */
+    static void showWeekly(Context c) {
+        SharedPreferences p = prefs(c);
+        if (!p.getBoolean("weekly", true)) return;
+        ensureChannels(c);
+        boolean sameWeek = mondayISO().equals(p.getString("weekStart", ""));
+        double week = sameWeek ? getD(p, "weekSpent") : 0;
+        Summary s = summary(c);
+        StringBuilder t = new StringBuilder();
+        t.append("Esta semana has gastado ").append(money0(week)).append(". ");
+        if (p.getBoolean("hasPlan", false) && curYM().equals(p.getString("ym", ""))) {
+            double can = getD(p, "canSpend");
+            int dl = Math.max(1, daysLeft() - 1);
+            if (can >= 0) t.append("Te quedan ").append(money0(can)).append(" hasta fin de mes (").append(money0(can / dl)).append("/día). ");
+            else t.append(s.sub).append(". ");
+        }
+        String cats = sameWeek ? p.getString("weekCats", "") : "";
+        if (cats != null && !cats.isEmpty()) t.append(cats);
+        String text = t.toString().trim();
+        Notification n = new NotificationCompat.Builder(c, CHANNEL_WEEKLY)
+                .setSmallIcon(R.drawable.ic_stat_money)
+                .setColor(MINT)
+                .setContentTitle("📊 Tu semana")
+                .setContentText(text)
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(text))
+                .setAutoCancel(true)
+                .setContentIntent(openApp(c, 105))
+                .build();
+        try {
+            NotificationManagerCompat.from(c).notify(WEEKLY_ID, n);
         } catch (SecurityException ignored) {
         }
     }
