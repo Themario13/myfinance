@@ -37,16 +37,9 @@ jobs:
         run: npx cap sync android
 
       - name: Clave de firma fija (para poder actualizar sin perder datos)
-        env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
         run: |
           mkdir -p ~/.android
-          if [ -n "$KEYSTORE_B64" ]; then
-            echo "$KEYSTORE_B64" | base64 -d > ~/.android/debug.keystore
-            echo "Usando la clave de firma guardada"
-          else
-            echo "::warning::No hay ANDROID_KEYSTORE_B64; cada APK tendrá una firma distinta"
-          fi
+          cp android/keystore/miscuentas.keystore ~/.android/debug.keystore
 
       - name: Compilar
         working-directory: android
