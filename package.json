@@ -1,0 +1,13 @@
+{
+  "name": "mis-cuentas",
+  "version": "1.0.0",
+  "private": true,
+  "description": "App personal de gastos e ingresos",
+  "dependencies": {
+    "@capacitor/android": "^8.6.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/browser": "^8.0.5",
+    "@capacitor/cli": "^8.6.0",
+    "@capacitor/core": "^8.6.0"
+  }
+}

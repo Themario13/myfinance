@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Volviendo a Mis Cuentas…</title>
+<style>body{font:16px/1.5 -apple-system,Roboto,sans-serif;background:#f5f6f8;color:#14171f;display:grid;place-items:center;min-height:100vh;margin:0;padding:24px;box-sizing:border-box;text-align:center}
+.c{background:#fff;border-radius:20px;padding:28px 22px;max-width:380px;box-shadow:0 1px 8px rgba(0,0,0,.06)}
+a.b{display:block;background:#0e9f6e;color:#fff;text-decoration:none;font-weight:700;padding:14px;border-radius:14px;margin:18px 0 10px}
+small{color:#6b7280}</style></head>
+<body><div class="c"><div style="font-size:40px">🏦</div><h2 style="margin:6px 0">Banco conectado</h2>
+<p id="m">Volviendo a Mis Cuentas…</p><a class="b" id="go" href="#">Abrir Mis Cuentas</a>
+<small>Si no se abre sola, pulsa el botón.</small></div>
+<script>
+var q=location.search||"";
+var intent="intent://auth"+q+"#Intent;scheme=miscuentas;package=com.mario.miscuentas;end";
+var plain="miscuentas://auth"+q;
+var link=/Android/i.test(navigator.userAgent)?intent:plain;
+document.getElementById("go").href=link;
+if(/[?&]error=/.test(q))document.getElementById("m").textContent="El banco no ha dado permiso. Vuelve a la app e inténtalo otra vez.";
+setTimeout(function(){location.href=link},300);
+</script></body></html>
