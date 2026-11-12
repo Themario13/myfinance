@@ -1209,7 +1209,11 @@ function openWizard(){
 }
 
 /* ============ Importar extracto (CSV de imagin / CaixaBank) ============ */
-function pickCSV(){const i=document.createElement("input");i.type="file";i.accept=".csv,text/csv,text/plain,text/comma-separated-values,*/*";i.onchange=()=>{if(i.files[0])importCSV(i.files[0])};document.body.appendChild(i);i.click();setTimeout(()=>i.remove(),60000)}
+function pickCSV(){const i=document.createElement("input");i.type="file";i.accept=".csv,text/csv,text/plain,text/comma-separated-values,*/*";i.style.cssText="position:fixed;left:-9999px;top:0;opacity:0;width:1px;height:1px;pointer-events:none";
+  const clean=()=>{i.remove();window.removeEventListener("focus",onFocus)};
+  const onFocus=()=>setTimeout(()=>{if(!i.files||!i.files.length)clean()},800);
+  i.onchange=()=>{if(i.files[0])importCSV(i.files[0]);clean()};
+  document.body.appendChild(i);i.click();window.addEventListener("focus",onFocus);setTimeout(clean,120000)}
 /* ============ Detectar fijos y nómina desde el extracto ============ */
 function median(a){if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2}
 function recurKey(text){const w=norm(text).split(" ").filter(x=>x.length>2&&!STOP.has(x)&&!/\d/.test(x));return w.slice(0,3).join(" ")}
@@ -1301,7 +1305,7 @@ async function importCSV(file){
     // quitar los fijos «auto» que ahora tienen el cargo real del banco
     S.txs=S.txs.filter(t=>!(t.src==="auto"&&!t.ext&&touched.has(t.fixedId+"|"+ymOf(t.date))));
     if(balance!=null)S.settings.balance={amount:balance,ts:Date.now(),date:todayISO()};
-    S.settings.csvDate=last;
+    S.settings.csvDate=last;S.settings.personal=1;S.settings.onboarded=true;
     relinkFixed();applyAutoLimits();save();render();
     toast(`${added} movimientos importados${linked?` · ${linked} ya los tenías`:""}${balance!=null?` · saldo ${money(balance)}`:""}`);
     setTimeout(()=>offerDetected(true),500);
