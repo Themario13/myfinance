@@ -584,13 +584,13 @@ function renderHome(){
     <div class="pills">
       <div class="pill"><small>Ingresos</small><b class="num inc">${esc(money0(P.has?P.income:P.inc))}</b></div>
       <div class="pill"><small>Gastos${P.ref?" netos":""}</small><b class="num exp">${esc(money0(P.exp))}</b></div>
-      <div class="pill"><small>${goal?"Ahorro":"Fijos pend."}</small><b class="num">${goal?esc(money0(past?P.inc-P.exp:Math.max(0,P.savedProj))):esc(money0(P.fixPending))}</b></div>
+      <div class="pill"><small>${goal?"Ahorras este mes":"Fijos pend."}</small><b class="num">${goal?esc(money0(past?P.inc-P.exp:Math.max(0,P.savedProj))):esc(money0(P.fixPending))}</b></div>
     </div>
   </div>
   ${isCur?closingCard():""}
   ${al.length?`<div class="card"><h2>Avisos</h2>${al.map(a=>`<div class="alert ${a[0]}"><span class="e1">${a[1]}</span><div>${a[2]}</div></div>`).join("")}</div>`:""}
   ${goal||H.saved||H.used?`<div class="card hucha">
-    <h2>🏠 ${esc(gName)} <a data-act="goal">Editar</a></h2>
+    <h2>🐷 Hucha · ${esc(gName)} <a data-act="goal">Editar</a></h2>
     <div class="mini" style="align-items:flex-end"><div><div style="font-size:30px;font-weight:800;letter-spacing:-.03em;color:${H.avail<0?"var(--exp)":"var(--text)"}" class="num">${esc(money0(H.avail))}</div><div class="note">en la hucha${H.thisMonth>0&&isCur?` · <span class="inc">+${esc(money0(H.thisMonth))}</span> previstos este mes`:""}</div></div>
     ${H.target?`<b class="num">${Math.round(Math.max(0,H.withMonth)/H.target*100)}%<span class="muted" style="font-weight:500"> de ${esc(money0(H.target))}</span></b>`:""}</div>
     ${H.target?`<div class="bar thin"><i style="width:${Math.max(0,Math.min(100,H.withMonth/H.target*100))}%"></i></div>`:""}
@@ -666,18 +666,18 @@ function renderFijos(){
   const totI=due.filter(f=>f.type==="inc").reduce((a,f)=>a+(+f.amount||0),0);
   const tpls=FIXED_TEMPLATES.filter(t=>!S.fixed.some(f=>f.name===t.name));
   const row=f=>{const p=fixedPaid(f,month),c=cat(f.cat),inc=f.type==="inc";
-    return `<div class="row"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid tap" data-fx="${f.id}" style="cursor:pointer"><div class="t">${esc(f.name)}${f.auto?'<span class="tag auto">auto</span>':""}${f.ext?'<span class="tag">otra cuenta</span>':""}${cat(f.cat).saving?'<span class="tag auto">ahorro</span>':""}</div><div class="s">${(f.freq||"m")==="m"?"Cada mes":"Cada año ("+monthName("2000-"+pad(f.month||1),true).replace(".","")+")"} · día ${f.day} · ${f.amount?esc(money(f.amount)):"sin importe"}</div></div>
-    ${p?`<span class="tag" style="background:var(--mint-soft);color:var(--mint)">✓ ${inc?"Cobrado":"Pagado"}</span>`:fixedDue(f,month)?`<button class="btn sm sec" data-pay="${f.id}">${inc?"Cobrado":"Pagar"}</button>`:""}</div>`};
+    return `<div class="row"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid tap" data-fx="${f.id}" style="cursor:pointer"><div class="t">${esc(f.name)}</div><div class="s">${(f.freq||"m")==="m"?"Cada mes":"Cada año ("+monthName("2000-"+pad(f.month||1),true).replace(".","")+")"} · día ${f.day}${f.ext?" · otra cuenta":""}${cat(f.cat).saving?" · va a tu ahorro":""}</div></div>
+    <div class="amt num ${inc?"inc":""}">${f.amount?esc(money(f.amount)):"—"}</div></div>`};
   $("#main").innerHTML=`
-  <div class="card"><h2>Este mes</h2>
-    <div class="mini"><span>Entra</span><b class="num inc">${esc(money(totI))}</b></div>
+  <div class="card"><h2>Lo que pagas cada mes</h2>
+    <div class="mini"><span>Entra (nómina)</span><b class="num inc">${esc(money(totI))}</b></div>
     <div class="mini" style="margin-top:4px"><span>Sale en fijos</span><b class="num">${esc(money(totE))}</b></div>
     ${due.length?`<div style="margin-top:10px">${due.map(row).join("")}</div>`:`<div class="empty">No tienes fijos este mes</div>`}
   </div>
-  ${other.length?`<div class="card"><h2>Otros meses</h2>${other.map(row).join("")}</div>`:""}
+  ${other.length?`<div class="card"><h2>Una vez al año</h2>${other.map(row).join("")}</div>`:""}
   <button class="btn block" id="addFx">+ Añadir fijo</button>
   ${tpls.length?`<div class="card" style="margin-top:12px"><h2>Sugerencias para tu piso</h2><div class="chips" style="flex-wrap:wrap">${tpls.map(t=>`<button class="chip" data-tpl="${FIXED_TEMPLATES.indexOf(t)}">${cat(t.cat).icon} ${esc(t.name)}</button>`).join("")}</div></div>`:""}
-  <div class="note" style="margin:14px 4px">Los fijos con <span class="tag auto" style="margin:0">auto</span> se anotan solos el día que tocan. Si conectas tu banco, se marcan con el cargo real.</div>`;
+  <div class="note" style="margin:14px 4px">Se anotan solos cada mes, no tienes que hacer nada. Toca uno para cambiar el importe o borrarlo.</div>`;
   $("#addFx").onclick=()=>openFixed({});
   document.querySelectorAll("[data-fx]").forEach(b=>b.onclick=()=>openFixed(S.fixed.find(f=>f.id===b.dataset.fx)));
   document.querySelectorAll("[data-pay]").forEach(b=>b.onclick=()=>{const f=S.fixed.find(x=>x.id===b.dataset.pay);if(!(+f.amount)){openFixed(f);toast("Primero pon el importe");return}
