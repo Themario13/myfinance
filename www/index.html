@@ -583,7 +583,7 @@ function bars6(){
 }
 function txRow(t){
   const c=cat(t.cat);const back=t.type==="exp"?refundsOf(t.id):0,of=refundTarget(t);
-  return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(t.note||c.name)}</div><div class="s">${esc(c.name)}${t.src==="bank"||t.src==="import"?'<span class="tag bank">banco</span>':""}${t.ext?'<span class="tag">otra cuenta</span>':""}${t.goal&&goalById(t.goal)?`<span class="tag auto">${esc(goalById(t.goal).icon||"🎯")} ${esc(goalById(t.goal).name.split(" ")[0])}</span>`:""}${t.src==="auto"?'<span class="tag auto">auto</span>':""}${t.review?'<span class="tag rev">revisar</span>':""}</div></div><div class="amt num ${t.type}">${t.type==="exp"?"−":"+"}${esc(money(t.amount))}${back?`<div class="note" style="font-weight:500">te devolvieron ${esc(money(back))}</div>`:""}${of?`<div class="note" style="font-weight:500">↩ ${esc((of.note||"").slice(0,18))}</div>`:""}</div></div>`;
+  return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(t.note||c.name)}</div><div class="s">${esc(c.name)}${t.src==="bank"||t.src==="import"?'<span class="tag bank">banco</span>':""}${t.ext?'<span class="tag">otra cuenta</span>':""}${t.goal&&goalById(t.goal)?`<span class="tag auto">${esc(goalById(t.goal).icon||"🎯")} ${esc(goalById(t.goal).name.split(" ")[0])}</span>`:""}${t.src==="auto"?'<span class="tag auto">auto</span>':""}${t.review?'<span class="tag rev">revisar</span>':""}${t.photo?'<span class="tag">📎 ticket</span>':""}</div></div><div class="amt num ${t.type}">${t.type==="exp"?"−":"+"}${esc(money(t.amount))}${back?`<div class="note" style="font-weight:500">te devolvieron ${esc(money(back))}</div>`:""}${of?`<div class="note" style="font-weight:500">↩ ${esc((of.note||"").slice(0,18))}</div>`:""}</div></div>`;
 }
 function bindRows(root){root.querySelectorAll("[data-tx]").forEach(r=>r.onclick=()=>{const t=S.txs.find(x=>x.id===r.dataset.tx);if(t)openTx(t)})}
 function renderHome(){
@@ -822,14 +822,21 @@ function renderAjustes(){
   <div class="card"><h2>Lo que he aprendido</h2>
     ${S.rules.length?S.rules.map((r,i)=>`<div class="row"><div class="mid"><div class="t">«${esc(r.key)}» → ${cat(r.cat).icon} ${esc(cat(r.cat).name)}</div></div><button class="btn sm sec" data-rdel="${i}">Olvidar</button></div>`).join(""):`<div class="note">Cuando cambies la categoría de un movimiento, recordaré el comercio para clasificarlo solo la próxima vez.</div>`}
   </div>
+  <div class="card"><h2>Tickets</h2>
+    <div class="note" style="margin-bottom:10px">Guarda la foto del ticket al anotar un gasto. Aquí los exportas todos a un archivo que abres en el ordenador (por correo, Drive, WhatsApp o cable).</div>
+    <div class="mini" style="margin-bottom:10px"><span>Gastos con foto</span><b class="num" id="tkCount">…</b></div>
+    <button class="btn sec block" id="tkExport">📤 Exportar tickets</button>
+  </div>
   <div class="card"><h2>Copia de seguridad</h2>
-    <div class="note" style="margin-bottom:10px">Tus datos se guardan solo en este móvil. Haz una copia de vez en cuando.</div>
+    <div class="note" style="margin-bottom:10px">Tus datos se guardan solo en este móvil. Haz una copia de vez en cuando. (Las fotos de tickets no entran en esta copia; para guardarlas usa «Exportar tickets».)</div>
     <div class="grid2"><button class="btn sec" id="exp1">Descargar copia</button><button class="btn sec" id="exp2">Copiar texto</button></div>
     <label class="btn sec block" style="margin-top:8px">Restaurar desde archivo<input type="file" id="imp" accept=".json,application/json" hidden></label>
     <button class="btn danger block" style="margin-top:8px" id="wipe">Borrar todos los datos</button>
   </div>
   ${(()=>{let l=[];try{l=JSON.parse(localStorage.getItem("miscuentas.errs")||"[]")}catch(_){}return l.length?`<div class="card"><h2>Diagnóstico <a id="errClr">Borrar</a></h2><div class="note">Si algo falla, copia esto y pásamelo:</div><div style="font-family:ui-monospace,monospace;font-size:11px;color:var(--muted);margin-top:8px;max-height:160px;overflow:auto">${l.map(esc).join("<br>")}</div><button class="btn sec block" id="errCopy" style="margin-top:10px">Copiar errores</button></div>`:""})()}
   <div class="note" style="text-align:center;margin:10px 0 20px">Mis Cuentas · hecha para ti</div>`;
+  photoCount().then(n=>{const e=$("#tkCount");if(e)e.textContent=n});
+  $("#tkExport").onclick=exportTickets;
   {const ec=$("#errCopy");if(ec)ec.onclick=async()=>{try{await navigator.clipboard.writeText(localStorage.getItem("miscuentas.errs")||"");toast("Copiado")}catch(e){toast("No se pudo copiar")}};const ex=$("#errClr");if(ex)ex.onclick=()=>{localStorage.removeItem("miscuentas.errs");renderAjustes()}}
   document.querySelectorAll("[data-go]").forEach(r=>r.onclick=()=>({nomina:()=>openFixed(nomina()||{type:"inc",cat:"nomina",name:"Nómina",day:28,auto:true,match:"nomina"}),balance:openBalance,goal:()=>go("goals"),fijos:()=>go("fijos"),limits:openLimits})[r.dataset.go]());
   $("#reWiz").onclick=openWizard;
@@ -879,6 +886,42 @@ function closeSheet(now){
 function confirmBox(text,okLabel){return new Promise(res=>{openSheet(`<h3>${esc(text)}</h3><div class="grid2"><button class="btn sec" id="cNo">Cancelar</button><button class="btn danger" id="cYes">${esc(okLabel||"Aceptar")}</button></div>`,el=>{el.querySelector("#cNo").onclick=()=>{closeSheet();res(false)};el.querySelector("#cYes").onclick=()=>{closeSheet();res(true)}})})}
 
 function drawRef(el){el._drawRef&&el._drawRef()}
+/* ============ Exportar tickets a un archivo para el ordenador ============ */
+async function exportTickets(){
+  const list=S.txs.filter(t=>t.photo).sort((a,b)=>b.date.localeCompare(a.date)||(b.ts||0)-(a.ts||0));
+  if(!list.length){toast("Aún no has añadido fotos a ningún gasto");return}
+  const btn=$("#tkExport");if(btn){btn.disabled=true;btn.innerHTML='<span class="spin"></span> Preparando…'}
+  try{
+    let items="",ok=0,totalByCat={};
+    for(const t of list){const src=await photoGet(t.id);if(!src)continue;ok++;
+      totalByCat[t.cat]=(totalByCat[t.cat]||0)+t.amount;
+      items+=`<div class="t"><div class="h"><div><b>${esc(money(t.amount))}</b> · ${esc(cat(t.cat).icon)} ${esc(cat(t.cat).name)}${t.note?" · "+esc(t.note):""}</div><span>${esc(new Date(t.date).toLocaleDateString("es-ES",{day:"2-digit",month:"long",year:"numeric"}))}</span></div><img src="${src}" loading="lazy"></div>`;}
+    if(!ok){toast("No encontré las fotos");return}
+    const resumen=Object.entries(totalByCat).sort((a,b)=>b[1]-a[1]).map(([c,v])=>`${esc(cat(c).name)}: ${esc(money(v))}`).join(" · ");
+    const html=`<!doctype html><html lang=es><head><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1"><title>Tickets · Mis Cuentas</title>
+<style>body{font-family:system-ui,-apple-system,Roboto,sans-serif;background:#f1f3f6;margin:0;padding:18px;color:#14171f}h1{text-align:center;font-size:22px;margin:4px 0}.sub{text-align:center;color:#667;margin:0 0 20px;font-size:14px}.t{background:#fff;border-radius:14px;margin:0 auto 16px;max-width:720px;overflow:hidden;box-shadow:0 1px 6px rgba(0,0,0,.08)}.h{padding:13px 16px;display:flex;justify-content:space-between;align-items:baseline;gap:12px;border-bottom:1px solid #eee}.h span{color:#889;font-size:13px;white-space:nowrap}img{width:100%;display:block}@media print{.t{break-inside:avoid}}</style></head>
+<body><h1>🧾 Tickets · Mis Cuentas</h1><p class="sub">${ok} ticket${ok>1?"s":""} · exportado el ${esc(new Date().toLocaleDateString("es-ES"))}<br>${resumen}</p>${items}</body></html>`;
+    const fname=`tickets-miscuentas-${todayISO()}.html`;
+    if(FS&&ShareP){
+      const w=await FS.writeFile({path:fname,data:html,directory:"CACHE",encoding:"utf8"});
+      await ShareP.share({title:"Tickets · Mis Cuentas",text:`${ok} tickets`,url:w.uri});
+    }else{
+      const blob=new Blob([html],{type:"text/html"});const url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=fname;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),4000);
+    }
+    toast(`${ok} ticket${ok>1?"s":""} exportado${ok>1?"s":""}`);
+  }catch(e){logErr("exportar tickets",e);toast("No se pudo exportar: "+(e.message||e))}
+  finally{if(btn){btn.disabled=false;btn.textContent="📤 Exportar tickets"}}
+}
+/* ============ Fotos de tickets (se guardan en el móvil, aparte) ============ */
+const PHOTODB="miscuentas-fotos";
+function idb(){return new Promise((res,rej)=>{const r=indexedDB.open(PHOTODB,1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains("fotos"))r.result.createObjectStore("fotos")};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+async function photoPut(id,data){const db=await idb();return new Promise((res,rej)=>{const tx=db.transaction("fotos","readwrite");tx.objectStore("fotos").put(data,id);tx.oncomplete=()=>res();tx.onerror=()=>rej(tx.error)})}
+async function photoGet(id){try{const db=await idb();return await new Promise(res=>{const rq=db.transaction("fotos","readonly").objectStore("fotos").get(id);rq.onsuccess=()=>res(rq.result||null);rq.onerror=()=>res(null)})}catch(e){return null}}
+async function photoDel(id){try{const db=await idb();await new Promise(res=>{const tx=db.transaction("fotos","readwrite");tx.objectStore("fotos").delete(id);tx.oncomplete=()=>res();tx.onerror=()=>res()})}catch(e){}}
+async function photoCount(){try{const db=await idb();return await new Promise(res=>{const rq=db.transaction("fotos","readonly").objectStore("fotos").count();rq.onsuccess=()=>res(rq.result||0);rq.onerror=()=>res(0)})}catch(e){return 0}}
+function compressImg(file,max=1400,q=0.72){return new Promise((res,rej)=>{const img=new Image(),url=URL.createObjectURL(file);img.onload=()=>{let w=img.width,h=img.height;if(w>h&&w>max){h=Math.round(h*max/w);w=max}else if(h>=w&&h>max){w=Math.round(w*max/h);h=max}const cv=document.createElement("canvas");cv.width=w;cv.height=h;cv.getContext("2d").drawImage(img,0,0,w,h);URL.revokeObjectURL(url);try{res(cv.toDataURL("image/jpeg",q))}catch(e){rej(e)}};img.onerror=()=>{URL.revokeObjectURL(url);rej(new Error("No se pudo leer la imagen"))};img.src=url})}
+function viewPhoto(src){const sc=document.createElement("div");sc.style.cssText="position:fixed;inset:0;z-index:100;background:rgba(0,0,0,.92);display:grid;place-items:center;padding:16px";sc.innerHTML=`<img src="${src}" style="max-width:100%;max-height:100%;border-radius:8px"><div style="position:absolute;top:calc(var(--top) + 14px);right:18px;color:#fff;font-size:28px">✕</div>`;sc.onclick=()=>sc.remove();document.body.appendChild(sc)}
+
 function openTx(t){
   const isNew=!t.id;let type=t.type||"exp";let sel=t.cat||null;
   const fromBank=t.src==="bank";
@@ -900,6 +943,7 @@ function openTx(t){
      <div class="chips" style="flex-wrap:wrap"><button class="chip ${t.goal?"":"on"}" data-g="">No</button>${(S.goals||[]).filter(g=>!g.archived||g.id===t.goal).map(g=>`<button class="chip ${t.goal===g.id?"on":""}" data-g="${g.id}">${esc(g.icon||"🎯")} ${esc(g.name)}</button>`).join("")}</div></div>
    <div class="field" id="tRefRow" style="display:none"><span>¿Te están devolviendo parte de un gasto?</span><div id="tRefBox"></div></div>
    <label class="field"><span>Fecha</span><input class="in" type="date" id="tDate" value="${t.date||todayISO()}" ${fromBank?"readonly":""}></label>
+   <div class="field"><span>📷 Foto del ticket (opcional)</span><div id="tPhotoBox"></div><input type="file" id="tPhotoIn" accept="image/*" hidden></div>
    <button class="btn block" id="tSave">${isNew?"Guardar":"Guardar cambios"}</button>
    ${!isNew?`<button class="btn danger block" id="tDel" style="margin-top:8px">Eliminar</button>`:""}`,el=>{
     el.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{type=b.dataset.t;if(sel&&cat(sel).type!==type)sel=null;draw(el)});
@@ -916,23 +960,33 @@ function openTx(t){
         draw("");box.querySelector("#tRefQ").oninput=e=>draw(e.target.value);
       };
     };
+    let photoId=t.photo?t.id:null,photoData=null,photoChanged=false;const pin=el.querySelector("#tPhotoIn");
+    const drawPhoto=async()=>{const box=el.querySelector("#tPhotoBox");let src=photoData;if(!src&&photoId&&!photoChanged)src=await photoGet(photoId);
+      if(src){box.innerHTML=`<div style="position:relative"><img id="tPhotoImg" src="${src}" style="width:100%;max-height:220px;object-fit:cover;border-radius:13px;display:block"><button class="btn sm danger" id="tPhotoX" style="position:absolute;top:8px;right:8px">Quitar</button></div>`;
+        box.querySelector("#tPhotoImg").onclick=()=>viewPhoto(src);box.querySelector("#tPhotoX").onclick=()=>{photoData=null;photoId=null;photoChanged=true;drawPhoto()}}
+      else box.innerHTML=`<button class="btn sec block" id="tPhotoAdd">📷 Añadir foto del ticket</button>`;
+      const a=box.querySelector("#tPhotoAdd");if(a)a.onclick=()=>pin.click()};
+    pin.onchange=async()=>{const f=pin.files&&pin.files[0];if(!f)return;try{photoData=await compressImg(f);photoChanged=true;drawPhoto()}catch(e){toast("No se pudo cargar la imagen")}pin.value=""};
+    drawPhoto();
     let goalId=t.goal||"";el.querySelectorAll("[data-g]").forEach(b=>b.onclick=()=>{goalId=b.dataset.g;el.querySelectorAll("[data-g]").forEach(x=>x.classList.toggle("on",x===b))});
     draw(el);
     const amt=el.querySelector("#tAmt"),note=el.querySelector("#tNote");
     if(isNew)setTimeout(()=>amt.focus(),300);
     note.oninput=()=>{if(!sel||el._auto){const g=classify(note.value,type);if(g.sure){sel=g.cat;el._auto=true;draw(el)}}};
-    el.querySelector("#tSave").onclick=()=>{
+    el.querySelector("#tSave").onclick=async()=>{
       const a=parseAmt(amt.value);if(!(a>0)){toast("Pon un importe");amt.focus();return}
       if(!sel)sel=classify(note.value,type).cat;
       const prevCat=t.cat;
       const g=type==="exp"&&goalId?goalId:undefined;
       const rf=type==="inc"&&refId?refId:undefined;if(rf){const tg=S.txs.find(x=>x.id===rf);if(tg)sel=tg.cat}
-      if(isNew){S.txs.push({id:uid(),type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||todayISO(),src:"manual",ts:Date.now(),created:Date.now(),goal:g,refundOf:rf})}
+      const id=isNew?uid():t.id;
+      if(isNew){S.txs.push({id,type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||todayISO(),src:"manual",ts:Date.now(),created:Date.now(),goal:g,refundOf:rf})}
       else{const x=S.txs.find(y=>y.id===t.id);Object.assign(x,{type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||x.date,review:false,goal:g,refundOf:rf});
         if(prevCat!==sel&&!rf){const r=learn(x,sel);if(r)toast(`Aprendido: «${r.key}» → ${cat(sel).name}${r.n?` (+${r.n})`:""}`)}}
+      if(photoChanged){const x=S.txs.find(y=>y.id===id);if(photoData){try{await photoPut(id,photoData);x.photo=true}catch(e){toast("No se pudo guardar la foto")}}else{await photoDel(id);delete x.photo}}
       save();closeSheet();render();if(rf&&!isNew)toast("Devolución asociada ↩");if(isNew)toast(rf?"Devolución anotada ↩":g?`Anotado en «${goalById(g).name}» 🎯`:type==="exp"?"Gasto anotado":"Ingreso anotado");
     };
-    const del=el.querySelector("#tDel");if(del)del.onclick=async()=>{closeSheet(true);if(await confirmBox("¿Eliminar este movimiento?","Eliminar")){S.txs=S.txs.filter(x=>x.id!==t.id);save();render()}};
+    const del=el.querySelector("#tDel");if(del)del.onclick=async()=>{closeSheet(true);if(await confirmBox("¿Eliminar este movimiento?","Eliminar")){if(t.photo)photoDel(t.id);S.txs=S.txs.filter(x=>x.id!==t.id);save();render()}};
   });
 }
 function openFixed(f){
@@ -1138,7 +1192,7 @@ async function importCSV(file){
 const Cap=window.Capacitor;
 const isNative=!!(Cap&&Cap.isNativePlatform&&Cap.isNativePlatform());
 const plug=n=>isNative?(Cap.Plugins&&Cap.Plugins[n])||(Cap.registerPlugin&&Cap.registerPlugin(n)):null;
-const QuickAdd=plug("QuickAdd"),AppP=plug("App"),BrowserP=plug("Browser");
+const QuickAdd=plug("QuickAdd"),AppP=plug("App"),BrowserP=plug("Browser"),FS=plug("Filesystem"),ShareP=plug("Share");
 const REDIRECT_DEFAULT="__REDIRECT_URL__";
 let pushT;
 const mondayISO=()=>{const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));return iso(d)};
