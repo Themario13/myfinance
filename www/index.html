@@ -222,6 +222,12 @@ const DEFAULT_CATS=[
  {id:"ropa",name:"Ropa",icon:"👕",color:"#c084fc",type:"exp",budget:0},
  {id:"subs",name:"Suscripciones",icon:"📺",color:"#38bdf8",type:"exp",budget:0},
  {id:"seguros",name:"Seguros e impuestos",icon:"🧾",color:"#94a3b8",type:"exp",budget:0},
+ {id:"coche",name:"Coche",icon:"🔧",color:"#93c5fd",type:"exp",budget:0},
+ {id:"pesca",name:"Pesca",icon:"🎣",color:"#5eead4",type:"exp",budget:0},
+ {id:"tabaco",name:"Tabaco",icon:"🚬",color:"#a8a29e",type:"exp",budget:0},
+ {id:"viajes",name:"Viajes",icon:"✈️",color:"#fda4af",type:"exp",budget:0},
+ {id:"cuidado",name:"Cuidado personal",icon:"💈",color:"#e879f9",type:"exp",budget:0},
+ {id:"regalos",name:"Regalos",icon:"🎁",color:"#fb7185",type:"exp",budget:0},
  {id:"otros",name:"Otros",icon:"📦",color:"#7c8594",type:"exp",budget:0},
  {id:"ahorro",name:"Traspaso a ahorro",icon:"🐷",color:"#3ee6a8",type:"exp",budget:0,saving:true},
  {id:"nomina",name:"Nómina",icon:"💼",color:"#3ee6a8",type:"inc",budget:0},
@@ -236,6 +242,11 @@ const avgVariable=()=>{const st=catStats();return st.months?Math.round(Object.va
 const DEFAULT_RULES={
  super:"guisson corp alim canolich mercadona carrefour lidl aldi eroski alcampo consum hipercor bonpreu bon preu condis ahorramas caprabo supercor gadis froiz masymas spar coviran dia supermercado hiper",
  ocio:"pub kebab pulperia parrilla rincon del gin mar de aral casino pooltarra mc donalds mdonalnds titanic setiles salda bizum enviado restaurante bar cafeteria cafe burger mcdonald telepizza dominos glovo just eat uber eats deliveroo starbucks cine cines ticketmaster kfc taberna cerveceria pizzeria vips foster tgb goiko",
+ coche:"taller itv neumaticos norauto midas feu vert lavado coche recambios",
+ tabaco:"estanco tabacos tabaco expendeduria",
+ pesca:"pesca cebos caza y pesca pescador",
+ viajes:"holafly booking airbnb hotel hostal",
+ cuidado:"peluqueria barberia barber estetica",
  transporte:"moeve benzina carburant venta billetes repsol cepsa galp shell gasolinera estacion de servicio ballenoil plenoil petroprix renfe metro emt cabify uber bolt freenow parking aparcamiento autopista peaje ryanair vueling blablacar alsa itv taller",
  suministros:"papernest elect papernest iberdrola endesa naturgy totalenergies holaluz octopus canal de isabel aguas agua agbar aqualia emasesa electricidad gas natural luz",
  internet:"movistar vodafone orange digi yoigo pepephone masmovil simyo lowi jazztel finetwork o2 telefonica",
@@ -319,7 +330,7 @@ function huchas(){
   };
   for(let m=first;m<cur;m=addMonths(m,1)){const x=sums(m);split(m,x.inc-x.exp,false)}
   const P=plan(cur);split(cur,P.has?P.income-P.exp-P.fixPending:sums(cur).inc-sums(cur).exp,true);
-  for(const t of S.txs)if(t.type==="exp"&&t.goal&&res[t.goal])res[t.goal].used+=t.amount;
+  for(const t of S.txs){if(t.type==="exp"&&t.goal&&res[t.goal])res[t.goal].used+=t.amount;const gr=goalRefund(t);if(gr&&res[gr])res[gr].used-=t.amount}
   const list=gs.map(g=>{const r=res[g.id];const avail=(g.archived&&g.finalSaved!=null?g.finalSaved:r.saved)-r.used;return{...r,avail,withMonth:avail+Math.max(0,r.month)}});
   return{list,extra};
 }
@@ -351,10 +362,14 @@ function learn(tx,newCat){
 
 /* ============ Cálculos ============ */
 const txOfMonth=ym=>S.txs.filter(t=>ymOf(t.date)===ym);
-const isSaving=t=>!!cat(t.cat).saving, isRefund=t=>t.type==="inc"&&(!!cat(t.cat).refund||cat(t.cat).type==="exp");
+const isSaving=t=>!!cat(t.cat).saving, isRefund=t=>t.type==="inc"&&(!!t.refundOf||!!cat(t.cat).refund||cat(t.cat).type==="exp");
+const refundTarget=t=>t.refundOf?S.txs.find(x=>x.id===t.refundOf):null;
+/** Devolución de un gasto de un objetivo: vuelve a su hucha, no toca el mes. */
+const goalRefund=t=>{const x=refundTarget(t);return x&&x.goal?x.goal:null};
+const refundsOf=id=>S.txs.filter(t=>t.refundOf===id).reduce((a,t)=>a+t.amount,0);
 /** exp = gasto neto (descontando lo que te devuelven los amigos); los traspasos a ahorro no son gasto. */
-function sums(ym){let inc=0,gross=0,ref=0,sav=0,gs=0;for(const t of txOfMonth(ym)){if(isRefund(t))ref+=t.amount;else if(t.type==="inc")inc+=t.amount;else if(t.goal)gs+=t.amount;else if(isSaving(t))sav+=t.amount;else gross+=t.amount}const exp=gross-ref;return{inc,exp,gross,ref,sav,gs,bal:inc-exp}}
-function byCat(ym,varOnly){const m={};let ref=0;for(const t of txOfMonth(ym)){if(varOnly&&t.fixedId)continue;if(isRefund(t)&&cat(t.cat).type==="exp")m[t.cat]=(m[t.cat]||0)-t.amount;else if(isRefund(t))ref+=t.amount;else if(t.type==="exp"&&!isSaving(t)&&!t.goal)m[t.cat]=(m[t.cat]||0)+t.amount}
+function sums(ym){let inc=0,gross=0,ref=0,sav=0,gs=0;for(const t of txOfMonth(ym)){if(goalRefund(t)){gs-=t.amount;continue}if(isRefund(t))ref+=t.amount;else if(t.type==="inc")inc+=t.amount;else if(t.goal)gs+=t.amount;else if(isSaving(t))sav+=t.amount;else gross+=t.amount}const exp=gross-ref;return{inc,exp,gross,ref,sav,gs,bal:inc-exp}}
+function byCat(ym,varOnly){const m={};let ref=0;for(const t of txOfMonth(ym)){if(varOnly&&t.fixedId)continue;if(goalRefund(t))continue;if(isRefund(t)&&cat(t.cat).type==="exp")m[t.cat]=(m[t.cat]||0)-t.amount;else if(isRefund(t))ref+=t.amount;else if(t.type==="exp"&&!isSaving(t)&&!t.goal)m[t.cat]=(m[t.cat]||0)+t.amount}
   // las devoluciones de amigos se descuentan de «comer fuera y ocio» (casi siempre son cenas a medias)
   if(ref&&m.ocio){const d=Math.min(m.ocio,ref);m.ocio-=d;ref-=d;if(m.ocio<=0.005)delete m.ocio}
   return Object.entries(m).filter(x=>x[1]>0.005).sort((a,b)=>b[1]-a[1])}
@@ -560,8 +575,8 @@ function bars6(){
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">${g}</svg><div class="mini" style="justify-content:center;gap:16px;margin-top:6px"><span><span class="dot" style="background:#3ee6a8"></span>Ingresos</span><span><span class="dot" style="background:#ff6b6b"></span>Gastos</span>${goal?`<span>✓ ahorro cumplido</span>`:""}</div>`;
 }
 function txRow(t){
-  const c=cat(t.cat);
-  return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(t.note||c.name)}</div><div class="s">${esc(c.name)}${t.src==="bank"||t.src==="import"?'<span class="tag bank">banco</span>':""}${t.ext?'<span class="tag">otra cuenta</span>':""}${t.goal&&goalById(t.goal)?`<span class="tag auto">${esc(goalById(t.goal).icon||"🎯")} ${esc(goalById(t.goal).name.split(" ")[0])}</span>`:""}${t.src==="auto"?'<span class="tag auto">auto</span>':""}${t.review?'<span class="tag rev">revisar</span>':""}</div></div><div class="amt num ${t.type}">${t.type==="exp"?"−":"+"}${esc(money(t.amount))}</div></div>`;
+  const c=cat(t.cat);const back=t.type==="exp"?refundsOf(t.id):0,of=refundTarget(t);
+  return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(t.note||c.name)}</div><div class="s">${esc(c.name)}${t.src==="bank"||t.src==="import"?'<span class="tag bank">banco</span>':""}${t.ext?'<span class="tag">otra cuenta</span>':""}${t.goal&&goalById(t.goal)?`<span class="tag auto">${esc(goalById(t.goal).icon||"🎯")} ${esc(goalById(t.goal).name.split(" ")[0])}</span>`:""}${t.src==="auto"?'<span class="tag auto">auto</span>':""}${t.review?'<span class="tag rev">revisar</span>':""}</div></div><div class="amt num ${t.type}">${t.type==="exp"?"−":"+"}${esc(money(t.amount))}${back?`<div class="note" style="font-weight:500">te devolvieron ${esc(money(back))}</div>`:""}${of?`<div class="note" style="font-weight:500">↩ ${esc((of.note||"").slice(0,18))}</div>`:""}</div></div>`;
 }
 function bindRows(root){root.querySelectorAll("[data-tx]").forEach(r=>r.onclick=()=>{const t=S.txs.find(x=>x.id===r.dataset.tx);if(t)openTx(t)})}
 function renderHome(){
@@ -854,6 +869,7 @@ function closeSheet(now){
 }
 function confirmBox(text,okLabel){return new Promise(res=>{openSheet(`<h3>${esc(text)}</h3><div class="grid2"><button class="btn sec" id="cNo">Cancelar</button><button class="btn danger" id="cYes">${esc(okLabel||"Aceptar")}</button></div>`,el=>{el.querySelector("#cNo").onclick=()=>{closeSheet();res(false)};el.querySelector("#cYes").onclick=()=>{closeSheet();res(true)}})})}
 
+function drawRef(el){el._drawRef&&el._drawRef()}
 function openTx(t){
   const isNew=!t.id;let type=t.type||"exp";let sel=t.cat||null;
   const fromBank=t.src==="bank";
@@ -862,6 +878,8 @@ function openTx(t){
     el.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>{sel=b.dataset.c;el._auto=false;el.querySelectorAll("[data-c]").forEach(x=>x.classList.toggle("on",x===b))});
     el.querySelectorAll(".seg button").forEach(b=>b.classList.toggle("on",b.dataset.t===type));
     el.querySelector("#tAmt").className="amount-in num "+type;
+    el.querySelector("#tRefRow").style.display=type==="inc"&&!fromBank||(type==="inc"&&fromBank)?"":"none";
+    if(type==="inc")drawRef(el);
     if(type!=="exp")el.querySelector("#tGoalRow").style.display="none";else if(activeGoals().length||t.goal)el.querySelector("#tGoalRow").style.display="";
   };
   openSheet(`<h3>${isNew?"Nuevo movimiento":fromBank?"Movimiento del banco":"Editar movimiento"}</h3>
@@ -871,10 +889,24 @@ function openTx(t){
    <div class="cats" id="tCats"></div>
    <div class="field" id="tGoalRow" ${activeGoals().length||t.goal?"":'style="display:none"'}><span>¿Es para un objetivo? <span style="font-weight:500">(sale de su hucha, no cuenta como gasto del mes)</span></span>
      <div class="chips" style="flex-wrap:wrap"><button class="chip ${t.goal?"":"on"}" data-g="">No</button>${(S.goals||[]).filter(g=>!g.archived||g.id===t.goal).map(g=>`<button class="chip ${t.goal===g.id?"on":""}" data-g="${g.id}">${esc(g.icon||"🎯")} ${esc(g.name)}</button>`).join("")}</div></div>
+   <div class="field" id="tRefRow" style="display:none"><span>¿Te están devolviendo parte de un gasto?</span><div id="tRefBox"></div></div>
    <label class="field"><span>Fecha</span><input class="in" type="date" id="tDate" value="${t.date||todayISO()}" ${fromBank?"readonly":""}></label>
    <button class="btn block" id="tSave">${isNew?"Guardar":"Guardar cambios"}</button>
    ${!isNew?`<button class="btn danger block" id="tDel" style="margin-top:8px">Eliminar</button>`:""}`,el=>{
     el.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{type=b.dataset.t;if(sel&&cat(sel).type!==type)sel=null;draw(el)});
+    let refId=t.refundOf||"";
+    el._drawRef=()=>{const box=el.querySelector("#tRefBox");const cur=refId&&S.txs.find(x=>x.id===refId);el.querySelector("#tCats").style.display=cur&&type==="inc"?"none":"";
+      box.innerHTML=cur?`<div class="alert g" style="margin:0"><span class="e1">↩</span><div><b>${esc(cur.note||cat(cur.cat).name)}</b> · ${esc(money(cur.amount))} · ${esc(dayLabel(cur.date))}<div class="note">Se descuenta de ${esc(cat(cur.cat).name)}${cur.goal&&goalById(cur.goal)?` y vuelve a la hucha de ${esc(goalById(cur.goal).name)}`:""}. <span class="link" id="tRefX">Quitar</span></div></div></div>`
+        :`<button class="btn sec block" id="tRefPick">↩ Sí, elegir el gasto</button>`;
+      const x=box.querySelector("#tRefX");if(x)x.onclick=()=>{refId="";el._drawRef()};
+      const pk=box.querySelector("#tRefPick");if(pk)pk.onclick=()=>{
+        const list=S.txs.filter(x=>x.type==="exp"&&!x.fixedId&&!isSaving(x)&&Date.now()-new Date(x.date).getTime()<75*864e5).sort((a,b)=>b.date.localeCompare(a.date)).slice(0,40);
+        box.innerHTML=`<input class="in" id="tRefQ" placeholder="Buscar gasto…" style="margin-bottom:6px"><div id="tRefL" style="max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:13px;padding:0 12px"></div>`;
+        const draw=q=>{box.querySelector("#tRefL").innerHTML=list.filter(x=>!q||norm(x.note).includes(norm(q))).map(x=>`<div class="row tap" data-r="${x.id}" style="padding:9px 0"><div class="mid"><div class="t">${esc(x.note||cat(x.cat).name)}</div><div class="s">${esc(dayLabel(x.date))} · ${esc(cat(x.cat).name)}</div></div><div class="amt num exp">${esc(money(x.amount))}</div></div>`).join("")||`<div class="empty">Nada</div>`;
+          box.querySelectorAll("[data-r]").forEach(r=>r.onclick=()=>{refId=r.dataset.r;el._drawRef()})};
+        draw("");box.querySelector("#tRefQ").oninput=e=>draw(e.target.value);
+      };
+    };
     let goalId=t.goal||"";el.querySelectorAll("[data-g]").forEach(b=>b.onclick=()=>{goalId=b.dataset.g;el.querySelectorAll("[data-g]").forEach(x=>x.classList.toggle("on",x===b))});
     draw(el);
     const amt=el.querySelector("#tAmt"),note=el.querySelector("#tNote");
@@ -885,10 +917,11 @@ function openTx(t){
       if(!sel)sel=classify(note.value,type).cat;
       const prevCat=t.cat;
       const g=type==="exp"&&goalId?goalId:undefined;
-      if(isNew){S.txs.push({id:uid(),type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||todayISO(),src:"manual",ts:Date.now(),created:Date.now(),goal:g})}
-      else{const x=S.txs.find(y=>y.id===t.id);Object.assign(x,{type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||x.date,review:false,goal:g});
-        if(prevCat!==sel){const r=learn(x,sel);if(r)toast(`Aprendido: «${r.key}» → ${cat(sel).name}${r.n?` (+${r.n})`:""}`)}}
-      save();closeSheet();render();if(isNew)toast(g?`Anotado en «${goalById(g).name}» 🎯`:type==="exp"?"Gasto anotado":"Ingreso anotado");
+      const rf=type==="inc"&&refId?refId:undefined;if(rf){const tg=S.txs.find(x=>x.id===rf);if(tg)sel=tg.cat}
+      if(isNew){S.txs.push({id:uid(),type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||todayISO(),src:"manual",ts:Date.now(),created:Date.now(),goal:g,refundOf:rf})}
+      else{const x=S.txs.find(y=>y.id===t.id);Object.assign(x,{type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||x.date,review:false,goal:g,refundOf:rf});
+        if(prevCat!==sel&&!rf){const r=learn(x,sel);if(r)toast(`Aprendido: «${r.key}» → ${cat(sel).name}${r.n?` (+${r.n})`:""}`)}}
+      save();closeSheet();render();if(rf&&!isNew)toast("Devolución asociada ↩");if(isNew)toast(rf?"Devolución anotada ↩":g?`Anotado en «${goalById(g).name}» 🎯`:type==="exp"?"Gasto anotado":"Ingreso anotado");
     };
     const del=el.querySelector("#tDel");if(del)del.onclick=async()=>{closeSheet(true);if(await confirmBox("¿Eliminar este movimiento?","Eliminar")){S.txs=S.txs.filter(x=>x.id!==t.id);save();render()}};
   });
