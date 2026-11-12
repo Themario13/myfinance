@@ -217,41 +217,55 @@ const DEFAULT_CATS=[
  {id:"casa",name:"Casa y muebles",icon:"🛋️",color:"#d6a76c",type:"exp",budget:0},
  {id:"transporte",name:"Transporte",icon:"🚗",color:"#60a5fa",type:"exp",budget:0},
  {id:"ocio",name:"Comer fuera y ocio",icon:"🍽️",color:"#f472b6",type:"exp",budget:0},
- {id:"salud",name:"Salud",icon:"💊",color:"#f87171",type:"exp",budget:0},
+ {id:"salud",name:"Salud y deporte",icon:"🧠",color:"#f87171",type:"exp",budget:0},
+ {id:"tools",name:"Herramientas e IA",icon:"💻",color:"#2dd4bf",type:"exp",budget:0},
  {id:"ropa",name:"Ropa",icon:"👕",color:"#c084fc",type:"exp",budget:0},
  {id:"subs",name:"Suscripciones",icon:"📺",color:"#38bdf8",type:"exp",budget:0},
  {id:"seguros",name:"Seguros e impuestos",icon:"🧾",color:"#94a3b8",type:"exp",budget:0},
  {id:"otros",name:"Otros",icon:"📦",color:"#7c8594",type:"exp",budget:0},
+ {id:"ahorro",name:"Traspaso a ahorro",icon:"🐷",color:"#3ee6a8",type:"exp",budget:0,saving:true},
  {id:"nomina",name:"Nómina",icon:"💼",color:"#3ee6a8",type:"inc",budget:0},
  {id:"extra",name:"Extras",icon:"✨",color:"#4ade80",type:"inc",budget:0},
+ {id:"devol",name:"Devoluciones de amigos",icon:"🤝",color:"#f472b6",type:"inc",budget:0,refund:true},
  {id:"otrosi",name:"Otros ingresos",icon:"💰",color:"#a3e635",type:"inc",budget:0},
 ];
-const LIMIT_SUGGEST={super:300,ocio:150,transporte:100,casa:100,ropa:60,subs:30,salud:30,otros:80};
+// medias reales de tu extracto (sep-nov 2026), redondeadas
+const LIMIT_SUGGEST={super:120,ocio:200,transporte:130,tools:60,subs:30,casa:60,ropa:50,otros:80};
+const AVG_VARIABLE=750; // lo que te cuesta el día a día de media según el extracto
 const DEFAULT_RULES={
- super:"mercadona carrefour lidl aldi eroski alcampo consum hipercor bonpreu bon preu condis ahorramas caprabo supercor gadis froiz masymas spar coviran dia supermercado hiper",
- ocio:"restaurante bar cafeteria cafe burger mcdonald telepizza dominos glovo just eat uber eats deliveroo starbucks cine cines ticketmaster kfc taberna cerveceria pizzeria vips foster tgb goiko",
- transporte:"repsol cepsa galp shell gasolinera estacion de servicio ballenoil plenoil petroprix renfe metro emt cabify uber bolt freenow parking aparcamiento autopista peaje ryanair vueling blablacar alsa itv taller",
- suministros:"iberdrola endesa naturgy totalenergies holaluz octopus canal de isabel aguas agua agbar aqualia emasesa electricidad gas natural luz",
+ super:"guisson corp alim canolich mercadona carrefour lidl aldi eroski alcampo consum hipercor bonpreu bon preu condis ahorramas caprabo supercor gadis froiz masymas spar coviran dia supermercado hiper",
+ ocio:"pub kebab pulperia parrilla rincon del gin mar de aral casino pooltarra mc donalds mdonalnds titanic setiles salda bizum enviado restaurante bar cafeteria cafe burger mcdonald telepizza dominos glovo just eat uber eats deliveroo starbucks cine cines ticketmaster kfc taberna cerveceria pizzeria vips foster tgb goiko",
+ transporte:"moeve benzina carburant venta billetes repsol cepsa galp shell gasolinera estacion de servicio ballenoil plenoil petroprix renfe metro emt cabify uber bolt freenow parking aparcamiento autopista peaje ryanair vueling blablacar alsa itv taller",
+ suministros:"papernest elect papernest iberdrola endesa naturgy totalenergies holaluz octopus canal de isabel aguas agua agbar aqualia emasesa electricidad gas natural luz",
  internet:"movistar vodafone orange digi yoigo pepephone masmovil simyo lowi jazztel finetwork o2 telefonica",
- subs:"netflix spotify hbo disney amazon prime prime video youtube apple com icloud google one dazn filmin openai chatgpt anthropic claude audible playstation xbox steam",
- salud:"farmacia sanitas adeslas dkv asisa clinica dentista dental optica fisioterapia hospital",
+ tools:"higgsfi higgsfield artlist mailtool openai nominalia link com",
+ subs:"g1sk002m google play onlyfans netflix spotify hbo disney amazon prime prime video youtube apple com icloud google one dazn filmin openai chatgpt anthropic claude audible playstation xbox steam",
+ salud:"psicologo psicologa sesion crossfit gimnasio gym farmacia sanitas adeslas dkv asisa clinica dentista dental optica fisioterapia hospital",
  ropa:"zara primark pull&bear bershka h&m mango decathlon stradivarius massimo dutti lefties shein zalando nike adidas springfield",
- casa:"ikea leroy merlin bricomart brico depot conforama maisons du monde jysk mediamarkt worten kave home sklum aki ferreteria",
+ casa:"todo 100 ikea leroy merlin bricomart brico depot conforama maisons du monde jysk mediamarkt worten kave home sklum aki ferreteria",
  hipoteca:"hipoteca prestamo hipotecario cuota prestamo amortizacion",
- comunidad:"comunidad de propietarios comunidad prop cdad prop administracion de fincas administrador fincas",
- seguros:"seguro seguros mapfre mutua madrilena linea directa axa allianz generali ocaso ibi ayuntamiento agencia tributaria aeat impuesto tasa basura",
- nomina:"nomina salario haberes",
- otrosi:"bizum recibido transferencia recibida devolucion abono reembolso",
+ comunidad:"nuestra senora comunidad de propietarios comunidad prop cdad prop administracion de fincas administrador fincas",
+ seguros:"mybox tributos diputac seguro seguros mapfre mutua madrilena linea directa axa allianz generali ocaso ibi ayuntamiento agencia tributaria aeat impuesto tasa basura",
+ nomina:"nomina trf nomina salario haberes",
+ devol:"bizum recibido transf a su favor",
+ extra:"div ishares div arcelor dividendo",
+ otrosi:"transferencia recibida devolucion abono reembolso",
 };
 const FIXED_TEMPLATES=[
- {name:"Hipoteca",cat:"hipoteca",day:1,match:"hipoteca"},
- {name:"Comunidad",cat:"comunidad",day:5,match:"comunidad"},
- {name:"Luz",cat:"suministros",day:10,match:""},
- {name:"Agua",cat:"suministros",day:15,match:""},
- {name:"Gas",cat:"suministros",day:15,match:""},
- {name:"Internet y móvil",cat:"internet",day:3,match:""},
- {name:"Seguro de hogar",cat:"seguros",day:1,match:"seguro",freq:"y"},
- {name:"IBI",cat:"seguros",day:1,match:"ibi",freq:"y"},
+ {name:"Hipoteca",cat:"hipoteca",day:1,match:"pres 32682017101",amount:299.93},
+ {name:"Comunidad",cat:"comunidad",day:5,match:"nuestra senora",amount:190.95,hint:"con calefacción y agua caliente"},
+ {name:"Mantenimiento portal",cat:"comunidad",day:3,match:"pago transferencias",amount:40},
+ {name:"Seguro MyBox",cat:"seguros",day:1,match:"mybox",amount:55.67},
+ {name:"Luz",cat:"suministros",day:20,match:"papernest",amount:36,hint:"Papernest, varía 32-39 €"},
+ {name:"Móvil Digi",cat:"internet",day:29,match:"digi",amount:10},
+ {name:"Psicólogo",cat:"salud",day:7,match:"mario",amount:140,hint:"2 sesiones de 70 €"},
+ {name:"CrossFit",cat:"salud",day:1,match:"crossfit",amount:35,ext:true,hint:"se paga desde otra cuenta"},
+ {name:"Claude",cat:"tools",day:5,match:"anthropic",amount:18},
+ {name:"Google One",cat:"subs",day:2,match:"google one",amount:1.99},
+ {name:"Ahorro a otra cuenta",cat:"ahorro",day:1,match:"pago traspasos",amount:70,hint:"cuenta como ahorro, no como gasto"},
+ {name:"Tributos Diputación",cat:"seguros",day:14,match:"tributos",amount:84.41,freq:"y",month:10,hint:"IBI y tasas"},
+ {name:"Agua",cat:"suministros",day:15,match:"",amount:0,off:true},
+ {name:"Internet casa",cat:"internet",day:3,match:"",amount:0,off:true},
 ];
 function freshState(){return{v:2,txs:[],cats:DEFAULT_CATS.map(c=>({...c})),fixed:[],rules:[],settings:{balance:null,saveGoal:0,goalName:"Ahorro para el piso",onboarded:false,notif:false,notifAsked:false},bank:{appId:"",pem:"",redirect:"",aspsp:"",country:"ES",sessionId:"",validUntil:"",accounts:[],lastSync:0,pendingState:""}}}
 let S;
@@ -267,6 +281,9 @@ function normalize(){
     S.v=2;
   }
   for(const fx of S.fixed){if(fx.auto===undefined)fx.auto=true}
+  for(const d of DEFAULT_CATS){const ex=S.cats.find(c=>c.id===d.id);
+    if(!ex){const oi=S.cats.findIndex(c=>c.id==="otros");if(d.type==="exp"&&oi>=0&&d.id!=="ahorro")S.cats.splice(oi,0,{...d});else S.cats.push({...d})}
+    else{if(d.saving)ex.saving=true;if(d.refund)ex.refund=true;if(d.id==="salud"&&ex.name==="Salud"){ex.name=d.name;ex.icon=d.icon}}}
 }
 function load(){try{const raw=localStorage.getItem(KEY);S=raw?JSON.parse(raw):freshState()}catch(e){S=freshState()}normalize()}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}pushNative()}
@@ -288,6 +305,7 @@ function classify(text,type){
     for(let i=0;i<list.length-1;i++){if(n.includes(" "+list[i]+" "+list[i+1]+" "))return{cat:c,sure:true}}
     for(const w of list){if(w.length>2&&n.includes(" "+w+" "))return{cat:c,sure:true}}
   }
+  if(type==="inc"){const g=classify(text,"exp");if(g.sure&&!cat(g.cat).saving)return{cat:g.cat,sure:true,refund:true}}
   return{cat:type==="inc"?"otrosi":"otros",sure:false};
 }
 function learn(tx,newCat){
@@ -299,18 +317,27 @@ function learn(tx,newCat){
 
 /* ============ Cálculos ============ */
 const txOfMonth=ym=>S.txs.filter(t=>ymOf(t.date)===ym);
-function sums(ym){let inc=0,exp=0;for(const t of txOfMonth(ym)){if(t.type==="inc")inc+=t.amount;else exp+=t.amount}return{inc,exp,bal:inc-exp}}
-function byCat(ym){const m={};for(const t of txOfMonth(ym))if(t.type==="exp")m[t.cat]=(m[t.cat]||0)+t.amount;return Object.entries(m).sort((a,b)=>b[1]-a[1])}
-const spentCat=(ym,id)=>txOfMonth(ym).filter(t=>t.type==="exp"&&t.cat===id).reduce((a,t)=>a+t.amount,0);
+const isSaving=t=>!!cat(t.cat).saving, isRefund=t=>t.type==="inc"&&(!!cat(t.cat).refund||cat(t.cat).type==="exp");
+/** exp = gasto neto (descontando lo que te devuelven los amigos); los traspasos a ahorro no son gasto. */
+function sums(ym){let inc=0,gross=0,ref=0,sav=0;for(const t of txOfMonth(ym)){if(isRefund(t))ref+=t.amount;else if(t.type==="inc")inc+=t.amount;else if(isSaving(t))sav+=t.amount;else gross+=t.amount}const exp=gross-ref;return{inc,exp,gross,ref,sav,bal:inc-exp}}
+function byCat(ym){const m={};let ref=0;for(const t of txOfMonth(ym)){if(isRefund(t)&&cat(t.cat).type==="exp")m[t.cat]=(m[t.cat]||0)-t.amount;else if(isRefund(t))ref+=t.amount;else if(t.type==="exp"&&!isSaving(t))m[t.cat]=(m[t.cat]||0)+t.amount}
+  // las devoluciones de amigos se descuentan de «comer fuera y ocio» (casi siempre son cenas a medias)
+  if(ref&&m.ocio){const d=Math.min(m.ocio,ref);m.ocio-=d;ref-=d;if(m.ocio<=0.005)delete m.ocio}
+  return Object.entries(m).filter(x=>x[1]>0.005).sort((a,b)=>b[1]-a[1])}
+const spentCat=(ym,id)=>{const e=byCat(ym).find(x=>x[0]===id);return e?e[1]:0};
 function fixedDue(f,ym){return (f.freq||"m")==="m"||+(f.month||1)===+ym.slice(5,7)}
-function fixedPaid(f,ym){return S.txs.find(t=>t.fixedId===f.id&&ymOf(t.date)===ym)}
+const fixedLinked=(f,ym)=>S.txs.filter(t=>t.fixedId===f.id&&ymOf(t.date)===ym);
+const fixedSum=(f,ym)=>fixedLinked(f,ym).reduce((a,t)=>a+t.amount,0);
+/** Pagado si lo cargado este mes llega al importe (permite pagos en varias veces, como el psicólogo). */
+function fixedPaid(f,ym){const l=fixedLinked(f,ym);if(!l.length)return null;const sum=l.reduce((a,t)=>a+t.amount,0);return(!(+f.amount)||sum>=(+f.amount)*0.9)?{amount:sum,tx:l[0]}:null}
 /** El plan del mes: lo que entra, lo fijo, el ahorro y lo que queda para gastar. */
 function plan(ym){
   const s=sums(ym),goal=+S.settings.saveGoal||0;
   let incPending=0,fixPending=0,fixTotal=0;
-  for(const f of S.fixed){if(!fixedDue(f,ym))continue;const a=+f.amount||0;const paid=fixedPaid(f,ym);
-    if((f.type||"exp")==="inc"){if(!paid)incPending+=a}
-    else{fixTotal+=paid?paid.amount:a;if(!paid)fixPending+=a}}
+  for(const f of S.fixed){if(!fixedDue(f,ym))continue;const a=+f.amount||0;const done=fixedSum(f,ym);
+    if(cat(f.cat).saving)continue;                         // los traspasos a ahorro no restan
+    if((f.type||"exp")==="inc"){incPending+=Math.max(0,a-done)}
+    else{fixTotal+=Math.max(a,done);fixPending+=Math.max(0,a-done)}}
   const income=s.inc+incPending;                  // lo que entra este mes (cobrado + por cobrar)
   const spendable=income-fixTotal-goal;           // presupuesto para el día a día
   const canSpend=income-s.exp-fixPending-goal;    // lo que puedes gastar aún sin tocar el ahorro
@@ -322,23 +349,25 @@ function totalMoney(){
   const accs=S.bank.accounts||[];
   if(S.bank.sessionId&&accs.some(a=>a.balance!=null)){
     let b=accs.reduce((a,x)=>a+(+x.balance||0),0);
-    for(const t of S.txs)if(t.src!=="bank"&&!t.bankId&&t.date>=(S.bank.balanceDate||"9999"))b+=t.type==="inc"?t.amount:-t.amount;
+    for(const t of S.txs)if(t.src!=="bank"&&!t.ext&&!t.bankId&&t.date>=(S.bank.balanceDate||"9999"))b+=t.type==="inc"?t.amount:-t.amount;
     return{v:b,src:"bank"};
   }
   const B=S.settings.balance;if(!B)return null;
   let b=+B.amount;
-  for(const t of S.txs){const when=t.created!==undefined?t.created:(t.ts||0);if(when>B.ts&&t.date>=B.date)b+=t.type==="inc"?t.amount:-t.amount}
+  for(const t of S.txs){if(t.ext)continue;const when=t.created!==undefined?t.created:(t.ts||0);if(when>B.ts&&t.date>=B.date)b+=t.type==="inc"?t.amount:-t.amount}
   return{v:b,src:"manual",since:B.ts};
 }
 /** Anota solos los fijos cuyo día ya ha llegado (si no hay banco conectado). */
 function autoFixed(){
-  if(S.bank.sessionId)return 0;
   const ym=curYM(),d=new Date().getDate();let n=0;
   for(const f of S.fixed){
     if(!f.auto||!(+f.amount)||!fixedDue(f,ym)||fixedPaid(f,ym))continue;
+    if(S.bank.sessionId&&!f.ext)continue;                                            // con banco conectado, llega el cargo real
+    if(!f.ext&&S.settings.csvDate&&`${ym}-${pad(day)}`<=S.settings.csvDate)continue;  // ya cubierto por el extracto importado
     const day=Math.min(+f.day||1,daysIn(ym));if(day>d)continue;
     if(f.since&&`${ym}-${pad(day)}`<f.since)continue;
-    S.txs.push({id:uid(),type:f.type||"exp",amount:+f.amount,cat:f.cat,note:f.name,date:`${ym}-${pad(day)}`,fixedId:f.id,src:"auto",ts:Date.now(),created:Date.now()});n++;
+    const left=Math.round(((+f.amount)-fixedSum(f,ym))*100)/100;if(left<=0)continue;
+    S.txs.push({id:uid(),type:f.type||"exp",amount:left,cat:f.cat,note:f.name,date:`${ym}-${pad(day)}`,fixedId:f.id,src:"auto",ts:Date.now(),created:Date.now(),ext:!!f.ext||undefined});n++;
   }
   if(n)save();return n;
 }
@@ -375,7 +404,7 @@ function bars6(){
 }
 function txRow(t){
   const c=cat(t.cat);
-  return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(t.note||c.name)}</div><div class="s">${esc(c.name)}${t.src==="bank"?'<span class="tag bank">banco</span>':""}${t.src==="auto"?'<span class="tag auto">auto</span>':""}${t.review?'<span class="tag rev">revisar</span>':""}</div></div><div class="amt num ${t.type}">${t.type==="exp"?"−":"+"}${esc(money(t.amount))}</div></div>`;
+  return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(t.note||c.name)}</div><div class="s">${esc(c.name)}${t.src==="bank"||t.src==="import"?'<span class="tag bank">banco</span>':""}${t.ext?'<span class="tag">otra cuenta</span>':""}${t.src==="auto"?'<span class="tag auto">auto</span>':""}${t.review?'<span class="tag rev">revisar</span>':""}</div></div><div class="amt num ${t.type}">${t.type==="exp"?"−":"+"}${esc(money(t.amount))}</div></div>`;
 }
 function bindRows(root){root.querySelectorAll("[data-tx]").forEach(r=>r.onclick=()=>{const t=S.txs.find(x=>x.id===r.dataset.tx);if(t)openTx(t)})}
 function renderHome(){
@@ -412,6 +441,8 @@ function renderHome(){
   }
   if(S.bank.sessionId&&S.bank.validUntil&&new Date(S.bank.validUntil)-Date.now()<7*864e5)al.push(["e","🔑",`El permiso de tu banco caduca pronto. <span class="link" data-act="ajustes">Renovar</span>`]);
   if(!S.settings.onboarded)al.push(["g","✨",`Configura tu plan en 1 minuto: nómina, fijos y ahorro. <span class="link" data-act="wizard">Empezar</span>`]);
+  else if(!S.settings.personal)al.push(["g","📊",`He preparado tus fijos y límites con tu extracto real. <span class="link" data-act="wizard">Revisar y aplicar</span>`]);
+  if(!S.settings.csvDate&&!S.bank.sessionId)al.push(["","📥",`Importa el extracto de imagin (CSV) para tener tu historial y tu saldo real. <span class="link" data-act="csv">Importar</span>`]);
   const tm=totalMoney();
   const bc=byCat(month);
   const lims=catsOf("exp").filter(c=>+c.budget>0);
@@ -428,7 +459,7 @@ function renderHome(){
     <div class="sub">${esc(sub)}</div>
     <div class="pills">
       <div class="pill"><small>Ingresos</small><b class="num inc">${esc(money0(P.has?P.income:P.inc))}</b></div>
-      <div class="pill"><small>Gastos</small><b class="num exp">${esc(money0(P.exp))}</b></div>
+      <div class="pill"><small>Gastos${P.ref?" netos":""}</small><b class="num exp">${esc(money0(P.exp))}</b></div>
       <div class="pill"><small>${goal?"Ahorro":"Fijos pend."}</small><b class="num">${goal?esc(money0(past?P.inc-P.exp:Math.max(0,P.savedProj))):esc(money0(P.fixPending))}</b></div>
     </div>
   </div>
@@ -441,15 +472,16 @@ function renderHome(){
   </div>
   ${lims.length?`<div class="card"><h2>Tus límites <a data-act="limits">Editar</a></h2>${lims.map(c=>{const v=spentCat(month,c.id),p=Math.min(100,v/c.budget*100);const col=v>c.budget?"var(--exp)":p>=85?"var(--warn)":c.color;return `<div class="lim"><div class="mini"><span>${c.icon} ${esc(c.name)}</span><span class="num"><b>${esc(money0(v))}</b> / ${esc(money0(c.budget))}</span></div><div class="bar thin"><i style="width:${p}%;background:${col}"></i></div></div>`}).join("")}</div>`:""}
   <div class="card"><h2>¿En qué se va?</h2>
-    ${bc.length?`<div class="donut-wrap">${donut(bc,P.exp)}<div class="legend">${bc.slice(0,6).map(([id,v])=>`<div class="l"><i style="background:${cat(id).color}"></i><span>${esc(cat(id).name)}</span><b class="num">${esc(money0(v))}</b></div>`).join("")}${bc.length>6?`<div class="l muted"><i></i><span>+${bc.length-6} más</span></div>`:""}</div></div>`
+    ${P.ref?`<div class="note" style="margin:-6px 0 12px">🤝 Te han devuelto <b>${esc(money0(P.ref))}</b> por Bizum; ya está descontado de «Comer fuera y ocio».</div>`:""}
+    ${bc.length?`<div class="donut-wrap">${donut(bc,bc.reduce((a,x)=>a+x[1],0))}<div class="legend">${bc.slice(0,6).map(([id,v])=>`<div class="l"><i style="background:${cat(id).color}"></i><span>${esc(cat(id).name)}</span><b class="num">${esc(money0(v))}</b></div>`).join("")}${bc.length>6?`<div class="l muted"><i></i><span>+${bc.length-6} más</span></div>`:""}</div></div>`
     :`<div class="empty">Aún no hay gastos este mes.<br>Pulsa <b>+</b> para anotar el primero.</div>`}
   </div>
-  ${S.fixed.length?`<div class="card"><h2>Fijos del mes <a data-act="fijos">Ver todos</a></h2>${S.fixed.filter(f=>fixedDue(f,month)).slice(0,7).map(f=>{const p=fixedPaid(f,month);const c=cat(f.cat);const inc=f.type==="inc";return `<div class="row"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(f.name)}</div><div class="s">Día ${f.day}${p?" · "+(inc?"cobrado":"pagado"):""}</div></div><div class="amt num">${p?`<span class="${inc?"inc":""}">✓ ${esc(money0(p.amount))}</span>`:`<span class="muted">${f.amount?esc(money0(f.amount)):"—"}</span>`}</div></div>`}).join("")}</div>`:""}
+  ${S.fixed.length?`<div class="card"><h2>Fijos del mes <a data-act="fijos">Ver todos</a></h2>${S.fixed.filter(f=>fixedDue(f,month)).slice(0,7).map(f=>{const p=fixedPaid(f,month);const c=cat(f.cat);const inc=f.type==="inc";return `<div class="row"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(f.name)}</div><div class="s">Día ${f.day}${p?" · "+(inc?"cobrado":"pagado"):""}</div></div><div class="amt num">${p?`<span class="${inc?"inc":""}">✓ ${esc(money0(p.amount))}</span>`:(fixedSum(f,month)>0?`<span class="warn">${esc(money0(fixedSum(f,month)))} / ${esc(money0(f.amount))}</span>`:`<span class="muted">${f.amount?esc(money0(f.amount)):"—"}</span>`)}</div></div>`}).join("")}</div>`:""}
   <div class="card"><h2>Últimos 6 meses</h2>${bars6()}</div>
   <div class="card"><h2>Últimos movimientos <a data-act="movs">Ver todos</a></h2>${recent.length?recent.map(txRow).join(""):`<div class="empty">Sin movimientos este mes</div>`}</div>`;
   bindRows($("#main"));
   $("#main").querySelectorAll("[data-act]").forEach(a=>a.onclick=e=>{e.stopPropagation();const x=a.dataset.act;
-    if(x==="sync")bankSync(true);else if(x==="review"){filter="review";go("movs")}else if(x==="wizard")openWizard();else if(x==="balance")openBalance();else if(x==="limits")openLimits();else go(x)});
+    if(x==="sync")bankSync(true);else if(x==="csv")pickCSV();else if(x==="review"){filter="review";go("movs")}else if(x==="wizard")openWizard();else if(x==="balance")openBalance();else if(x==="limits")openLimits();else go(x)});
 }
 
 /* ============ Movimientos ============ */
@@ -476,7 +508,7 @@ function renderFijos(){
   const totI=due.filter(f=>f.type==="inc").reduce((a,f)=>a+(+f.amount||0),0);
   const tpls=FIXED_TEMPLATES.filter(t=>!S.fixed.some(f=>f.name===t.name));
   const row=f=>{const p=fixedPaid(f,month),c=cat(f.cat),inc=f.type==="inc";
-    return `<div class="row"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid tap" data-fx="${f.id}" style="cursor:pointer"><div class="t">${esc(f.name)}${f.auto?'<span class="tag auto">auto</span>':""}</div><div class="s">${(f.freq||"m")==="m"?"Cada mes":"Cada año ("+monthName("2000-"+pad(f.month||1),true).replace(".","")+")"} · día ${f.day} · ${f.amount?esc(money(f.amount)):"sin importe"}</div></div>
+    return `<div class="row"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid tap" data-fx="${f.id}" style="cursor:pointer"><div class="t">${esc(f.name)}${f.auto?'<span class="tag auto">auto</span>':""}${f.ext?'<span class="tag">otra cuenta</span>':""}${cat(f.cat).saving?'<span class="tag auto">ahorro</span>':""}</div><div class="s">${(f.freq||"m")==="m"?"Cada mes":"Cada año ("+monthName("2000-"+pad(f.month||1),true).replace(".","")+")"} · día ${f.day} · ${f.amount?esc(money(f.amount)):"sin importe"}</div></div>
     ${p?`<span class="tag" style="background:var(--mint-soft);color:var(--mint)">✓ ${inc?"Cobrado":"Pagado"}</span>`:fixedDue(f,month)?`<button class="btn sm sec" data-pay="${f.id}">${inc?"Cobrado":"Pagar"}</button>`:""}</div>`};
   $("#main").innerHTML=`
   <div class="card"><h2>Este mes</h2>
@@ -525,6 +557,10 @@ function renderAjustes(){
       <div id="bankPick" style="margin-top:12px"></div>
       ${B.pendingState?`<div class="note" style="margin-top:14px">¿El banco te dejó en una página sin volver a la app? Copia la dirección de esa página y pégala aquí:</div><div class="grid2" style="grid-template-columns:1fr auto;margin-top:6px"><input class="in" id="bCode" placeholder="https://…?code=…"><button class="btn" id="bCodeGo">OK</button></div>`:""}`}
   </div>
+  <div class="card"><h2>Importar extracto</h2>
+    <div class="note" style="margin-bottom:10px">Sube el CSV de movimientos de imagin (Movimientos → Descargar). Meto tu historial, clasifico todo y pongo tu saldo real.${S.settings.csvDate?` Último extracto: hasta el ${esc(new Date(S.settings.csvDate).toLocaleDateString("es-ES"))}.`:""}</div>
+    <button class="btn sec block" id="csvBtn">📥 Importar CSV</button>
+  </div>
   <div class="card"><h2>Categorías <a id="addCat">+ Nueva</a></h2>
     ${["exp","inc"].map(t=>`<div class="note" style="margin:6px 0 2px;font-weight:700">${t==="exp"?"Gastos":"Ingresos"}</div>`+catsOf(t).map(c=>`<div class="row tap" data-cat="${c.id}"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(c.name)}</div></div><span class="muted">›</span></div>`).join("")).join("")}
   </div>
@@ -540,6 +576,7 @@ function renderAjustes(){
   <div class="note" style="text-align:center;margin:10px 0 20px">Mis Cuentas · hecha para ti</div>`;
   document.querySelectorAll("[data-go]").forEach(r=>r.onclick=()=>({nomina:()=>openFixed(nomina()||{type:"inc",cat:"nomina",name:"Nómina",day:28,auto:true,match:"nomina"}),balance:openBalance,goal:openGoal,limits:openLimits})[r.dataset.go]());
   $("#reWiz").onclick=openWizard;
+  $("#csvBtn").onclick=pickCSV;
   if(isNative&&!connected){
     const get=()=>{B.appId=$("#bApp").value.trim();B.pem=$("#bPem").value.trim();B.redirect=$("#bRed").value.trim();save()};
     ["#bApp","#bPem","#bRed"].forEach(s=>$(s).onchange=get);
@@ -628,17 +665,19 @@ function openFixed(f){
    <label class="field" id="fMonthW"><span>Mes</span><select class="in" id="fMonth">${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${+(f.month||1)===i+1?"selected":""}>${monthName("2000-"+pad(i+1)).replace(" de 2000","")}</option>`).join("")}</select></label></div>
    <label class="field"><span>Categoría</span><select class="in" id="fCat"></select></label>
    <div class="set-row" style="border:0;padding-top:0"><div class="mid"><b>Anotar solo</b><div class="s">Se apunta automáticamente el día que toca</div></div><button class="sw ${f.auto!==false?"on":""}" id="fAuto"></button></div>
+   <div class="set-row" style="border:0;padding-top:0"><div class="mid"><b>Desde otra cuenta</b><div class="s">Cuenta en tu plan, pero no resta del saldo de esta cuenta</div></div><button class="sw ${f.ext?"on":""}" id="fExt"></button></div>
    <label class="field"><span>Texto en el banco (opcional)</span><input class="in" id="fMatch" value="${esc(f.match||"")}" placeholder="Ej: hipoteca, iberdrola…" autocapitalize="off"></label>
    <button class="btn block" id="fSave">Guardar</button>
    ${!isNew?`<button class="btn danger block" id="fDel" style="margin-top:8px">Eliminar</button>`:""}`,el=>{
     let auto=f.auto!==false;const sw=el.querySelector("#fAuto");sw.onclick=()=>{auto=!auto;sw.classList.toggle("on",auto)};
+    let ext=!!f.ext;const sx=el.querySelector("#fExt");sx.onclick=()=>{ext=!ext;sx.classList.toggle("on",ext)};
     const fill=()=>{el.querySelector("#fCat").innerHTML=catsOf(type).map(c=>`<option value="${c.id}" ${f.cat===c.id?"selected":""}>${c.icon} ${esc(c.name)}</option>`).join("")};fill();
     const fm=()=>el.querySelector("#fMonthW").style.visibility=el.querySelector("#fFreq").value==="y"?"visible":"hidden";fm();el.querySelector("#fFreq").onchange=fm;
     el.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{type=b.dataset.t;el.querySelectorAll(".seg button").forEach(x=>x.classList.toggle("on",x===b));fill()});
     if(!f.amount)setTimeout(()=>el.querySelector("#fAmt").focus(),300);
     el.querySelector("#fSave").onclick=()=>{
       const name=el.querySelector("#fName").value.trim();if(!name){toast("Ponle un nombre");return}
-      const data={name,type,auto,amount:parseAmt(el.querySelector("#fAmt").value),day:Math.min(31,Math.max(1,parseInt(el.querySelector("#fDay").value)||1)),freq:el.querySelector("#fFreq").value,month:+el.querySelector("#fMonth").value,cat:el.querySelector("#fCat").value,match:el.querySelector("#fMatch").value.trim()};
+      const data={name,type,auto,ext,amount:parseAmt(el.querySelector("#fAmt").value),day:Math.min(31,Math.max(1,parseInt(el.querySelector("#fDay").value)||1)),freq:el.querySelector("#fFreq").value,month:+el.querySelector("#fMonth").value,cat:el.querySelector("#fCat").value,match:el.querySelector("#fMatch").value.trim()};
       if(isNew)S.fixed.push({id:f.id||uid(),since:todayISO(),...data});else Object.assign(f,data);
       save();autoFixed();closeSheet();render();
     };
@@ -700,14 +739,17 @@ function openCat(c){
 /* ============ Asistente inicial ============ */
 function openWizard(){
   const nom=nomina();
-  const W={step:0,nomAmt:nom?nom.amount:0,nomDay:nom?nom.day:28,bal:totalMoney()?.v??"",
-    fixed:FIXED_TEMPLATES.map(t=>{const ex=S.fixed.find(f=>f.name===t.name);return{...t,amount:ex?ex.amount:0,on:!!ex}}),
-    extra:S.fixed.filter(f=>f.type!=="inc"&&!FIXED_TEMPLATES.some(t=>t.name===f.name)).map(f=>({...f,on:true})),
+  const P1=!!S.settings.personal; // ¿ya aplicó sus datos reales?
+  const OLD_GENERIC=["Gas","Seguro de hogar","IBI","Internet y móvil"];
+  const W={step:0,nomAmt:nom&&(P1||nom.amount===1599.8)?nom.amount:1599.80,nomDay:nom&&P1?nom.day:30,bal:totalMoney()?.v??"",
+    fixed:FIXED_TEMPLATES.map(t=>{const ex=S.fixed.find(f=>f.name===t.name);return{...t,amount:P1&&ex?ex.amount:(t.amount||(ex?ex.amount:0)),on:P1?!!ex:!t.off}}),
+    extra:S.fixed.filter(f=>f.type!=="inc"&&!FIXED_TEMPLATES.some(t=>t.name===f.name)).map(f=>({...f,on:P1||!OLD_GENERIC.includes(f.name)})),
     goal:S.settings.saveGoal||0,goalName:S.settings.goalName||"Ahorro para el piso",
-    lims:Object.fromEntries(Object.keys(LIMIT_SUGGEST).map(k=>[k,+cat(k).budget||LIMIT_SUGGEST[k]]))};
+    lims:Object.fromEntries(Object.keys(LIMIT_SUGGEST).map(k=>[k,P1&&+cat(k).budget?+cat(k).budget:LIMIT_SUGGEST[k]]))};
   const N=6;
   const el=document.createElement("div");el.className="wiz";document.body.appendChild(el);
-  const fixedTot=()=>[...W.fixed,...W.extra].filter(f=>f.on&&(f.freq||"m")==="m").reduce((a,f)=>a+(+f.amount||0),0);
+  const fixedTot=()=>[...W.fixed,...W.extra].filter(f=>f.on&&(f.freq||"m")==="m"&&!cat(f.cat).saving).reduce((a,f)=>a+(+f.amount||0),0);
+  const savTot=()=>[...W.fixed,...W.extra].filter(f=>f.on&&cat(f.cat).saving).reduce((a,f)=>a+(+f.amount||0),0);
   const yearTot=()=>[...W.fixed,...W.extra].filter(f=>f.on&&f.freq==="y").reduce((a,f)=>a+(+f.amount||0),0);
   const steps=[
     ()=>`<div class="emoji">💼</div><h2>Tu nómina</h2><p class="lead">Lo que te ingresan cada mes y qué día suele llegar. Se anotará sola.</p>
@@ -715,13 +757,14 @@ function openWizard(){
       <label class="field"><span>Día de cobro</span><input class="in num" id="wDay" inputmode="numeric" value="${W.nomDay}"></label>`,
     ()=>`<div class="emoji">🏦</div><h2>¿Cuánto tienes ahora?</h2><p class="lead">El saldo de tu cuenta hoy. A partir de aquí lo mantengo al día con cada gasto.</p>
       <input class="big-in num" id="wBal" inputmode="decimal" placeholder="0 €" value="${W.bal===""?"":amtStr(Math.round(W.bal*100)/100)}">`,
-    ()=>`<div class="emoji">🏠</div><h2>Tus gastos fijos</h2><p class="lead">Marca los que tienes y pon cuánto pagas. Luego puedes añadir más en «Fijos».</p>
-      <div class="card" style="padding:6px 16px">${[...W.fixed,...W.extra].map((f,i)=>`<div class="fxrow"><button class="sw ${f.on?"on":""}" data-fon="${i}"></button><div class="nm">${cat(f.cat).icon} ${esc(f.name)}<small>${f.freq==="y"?"una vez al año":"cada mes"}</small></div><input class="in bud num" data-famt="${i}" inputmode="decimal" placeholder="0 €" value="${amtStr(f.amount)}"></div>`).join("")}</div>
+    ()=>`<div class="emoji">🏠</div><h2>Tus gastos fijos</h2><p class="lead">Los he sacado de tu extracto. Revisa los importes y desmarca lo que no toque.</p>
+      <div class="card" style="padding:6px 16px">${[...W.fixed,...W.extra].map((f,i)=>`<div class="fxrow"><button class="sw ${f.on?"on":""}" data-fon="${i}"></button><div class="nm">${cat(f.cat).icon} ${esc(f.name)}<small>${f.freq==="y"?"una vez al año":"cada mes · día "+(f.day||1)}${f.hint?" · "+esc(f.hint):""}</small></div><input class="in bud num" data-famt="${i}" inputmode="decimal" placeholder="0 €" value="${amtStr(f.amount)}"></div>`).join("")}</div>
       <div class="calc"><div class="mini"><span>Fijos al mes</span><b class="num" id="wFixT">${money(fixedTot())}</b></div>${yearTot()?`<div class="mini"><span>Pagos anuales</span><b class="num">${money(yearTot())}</b></div>`:""}</div>`,
-    ()=>{const free=(+W.nomAmt||0)-fixedTot();return `<div class="emoji">🎯</div><h2>Ahorro para el piso</h2><p class="lead">¿Cuánto quieres apartar cada mes? Si te lo empiezas a comer, te aviso.</p>
+    ()=>{const free=(+W.nomAmt||0)-fixedTot();return `<div class="emoji">🎯</div><h2>Ahorro para el piso</h2><p class="lead">¿Cuánto quieres ahorrar cada mes en total? Si te lo empiezas a comer, te aviso.${savTot()?` Los ${money0(savTot())} que traspasas el día 1 ya cuentan como ahorro.`:""}</p>
       <input class="big-in num" id="wGoal" inputmode="decimal" placeholder="0 €" value="${amtStr(W.goal)}">
       <div class="calc"><div class="mini"><span>Nómina</span><b class="num inc">${money0(+W.nomAmt||0)}</b></div><div class="mini"><span>Fijos</span><b class="num">−${money0(fixedTot())}</b></div><div class="mini"><span>Ahorro</span><b class="num" id="wGoalV">−${money0(W.goal)}</b></div>
-      <div class="mini tot"><span><b>Para el día a día</b></span><b class="num" id="wFree">${money0(free-W.goal)}</b></div><div class="note" id="wPerDay" style="text-align:right">≈ ${money0((free-W.goal)/30)} al día</div></div>`},
+      <div class="mini tot"><span><b>Para el día a día</b></span><b class="num" id="wFree">${money0(free-W.goal)}</b></div><div class="note" id="wPerDay" style="text-align:right">≈ ${money0((free-W.goal)/30)} al día</div></div>
+      <div class="alert ${free-AVG_VARIABLE<W.goal?"w":"g"}" style="margin-top:12px"><span class="e1">📊</span><div>Según tu extracto, tu día a día (súper, gasolina, salir…) te cuesta unos <b>${money0(AVG_VARIABLE)}/mes</b>. Al ritmo de ahora ahorrarías unos <b>${money0(Math.max(0,free-AVG_VARIABLE))}</b>. Para ahorrar más hay que recortar sobre todo en bares y restaurantes.</div></div>`},
     ()=>`<div class="emoji">🧭</div><h2>Tus límites</h2><p class="lead">Lo máximo que quieres gastar al mes en cada cosa. Te propongo unos; cámbialos a tu gusto.</p>
       <div class="card" style="padding:6px 16px">${Object.keys(W.lims).map(k=>`<div class="fxrow"><div class="nm">${cat(k).icon} ${esc(cat(k).name)}</div><input class="in bud num" data-lim="${k}" inputmode="decimal" placeholder="—" value="${amtStr(W.lims[k])}"></div>`).join("")}</div>
       <div class="calc"><div class="mini"><span>Suma de límites</span><b class="num" id="wLimT">${money0(Object.values(W.lims).reduce((a,b)=>a+(+b||0),0))}</b></div><div class="mini"><span>Disponible para el día a día</span><b class="num">${money0((+W.nomAmt||0)-fixedTot()-W.goal)}</b></div></div>`,
@@ -752,11 +795,11 @@ function openWizard(){
   function finish(){
     // nómina
     let nm=nomina();
-    if(+W.nomAmt>0){if(nm)Object.assign(nm,{amount:+W.nomAmt,day:W.nomDay});else S.fixed.unshift({id:uid(),name:"Nómina",type:"inc",cat:"nomina",amount:+W.nomAmt,day:W.nomDay,freq:"m",month:1,auto:true,match:"nomina",since:todayISO()})}
+    if(+W.nomAmt>0){if(nm)Object.assign(nm,{amount:+W.nomAmt,day:W.nomDay,match:"nomina"});else S.fixed.unshift({id:uid(),name:"Nómina",type:"inc",cat:"nomina",amount:+W.nomAmt,day:W.nomDay,freq:"m",month:1,auto:true,match:"nomina",since:todayISO()})}
     // fijos
     for(const f of [...W.fixed,...W.extra]){
       const ex=S.fixed.find(x=>x.name===f.name&&x.type!=="inc");
-      if(f.on){if(ex)Object.assign(ex,{amount:+f.amount||0});else S.fixed.push({id:uid(),name:f.name,type:"exp",cat:f.cat,amount:+f.amount||0,day:f.day||1,freq:f.freq||"m",month:f.month||1,auto:true,match:f.match||"",since:todayISO()})}
+      if(f.on){if(ex)Object.assign(ex,{amount:+f.amount||0,cat:f.cat,day:f.day||ex.day,match:f.match!==undefined?f.match:ex.match,ext:!!f.ext,freq:f.freq||ex.freq||"m",month:f.month||ex.month||1});else S.fixed.push({id:uid(),name:f.name,type:"exp",cat:f.cat,amount:+f.amount||0,day:f.day||1,freq:f.freq||"m",month:f.month||1,auto:true,ext:!!f.ext,match:f.match||"",since:todayISO()})}
       else if(ex)S.fixed=S.fixed.filter(x=>x!==ex);
     }
     // saldo, ahorro, límites
@@ -764,15 +807,60 @@ function openWizard(){
     // los fijos de este mes cuyo día ya pasó: marcados como hechos, sin tocar el saldo de hoy
     {const ym=curYM(),d=new Date().getDate();
      for(const f of S.fixed){if(!(+f.amount)||!fixedDue(f,ym)||fixedPaid(f,ym))continue;const day=Math.min(+f.day||1,daysIn(ym));
-       if(day<=d)S.txs.push({id:uid(),type:f.type||"exp",amount:+f.amount,cat:f.cat,note:f.name,date:`${ym}-${pad(day)}`,fixedId:f.id,src:"auto",ts:Date.now(),created:0})}}
+       if(day<=d)S.txs.push({id:uid(),type:f.type||"exp",amount:+f.amount,cat:f.cat,note:f.name,date:`${ym}-${pad(day)}`,fixedId:f.id,src:"auto",ts:Date.now(),created:0,ext:!!f.ext||undefined})}}
     S.settings.saveGoal=+W.goal||0;
     for(const [k,v] of Object.entries(W.lims))cat(k).budget=+v||0;
-    S.settings.onboarded=true;
+    S.settings.onboarded=true;S.settings.personal=1;
     const wn=el.querySelector("#wNotif");
     if(wn){S.settings.notif=wn.classList.contains("on");S.settings.notifAsked=true;QuickAdd&&QuickAdd.setNotification({enabled:S.settings.notif}).catch(()=>{})}
     save();el.remove();go("home");toast("¡Plan guardado! 🎉");
   }
   draw();
+}
+
+/* ============ Importar extracto (CSV de imagin / CaixaBank) ============ */
+function pickCSV(){const i=document.createElement("input");i.type="file";i.accept=".csv,text/csv,text/plain,text/comma-separated-values,*/*";i.onchange=()=>{if(i.files[0])importCSV(i.files[0])};document.body.appendChild(i);i.click();setTimeout(()=>i.remove(),60000)}
+function parseImagin(text){
+  const lines=text.replace(/\r/g,"").split("\n").map(l=>l.trim()).filter(Boolean);
+  const num=v=>parseAmt(String(v).replace(/EUR/i,""));
+  let balance=null,rows=[],inRows=false;
+  for(let i=0;i<lines.length;i++){
+    const c=lines[i].split(";");
+    if(/^IBAN$/i.test(c[0])&&lines[i+1]){const n=lines[i+1].split(";");balance=num(n[1]);continue}
+    if(/^Concepto$/i.test(c[0])&&/Fecha/i.test(c[1])){inRows=true;continue}
+    if(inRows&&c.length>=3&&/^\d{2}\/\d{2}\/\d{4}$/.test(c[1])){const [d,m,y]=c[1].split("/");rows.push({concept:c[0].trim(),date:`${y}-${m}-${d}`,amount:num(c[2])})}
+  }
+  return{balance,rows};
+}
+async function importCSV(file){
+  try{
+    let text=await file.text();
+    if(text.includes("\ufffd")){try{text=new TextDecoder("windows-1252").decode(await file.arrayBuffer())}catch(e){}}
+    const {balance,rows}=parseImagin(text);
+    if(!rows.length){toast("No encuentro movimientos en ese archivo");return}
+    const seen={};let added=0,linked=0;const touched=new Set();let last="";
+    for(const r of rows.slice().reverse()){
+      const key=r.date+"|"+r.amount+"|"+norm(r.concept);seen[key]=(seen[key]||0)+1;
+      const id="csv:"+key+"#"+seen[key];
+      if(r.date>last)last=r.date;
+      if(S.txs.some(x=>x.id===id||x.bankId===id))continue;
+      const type=r.amount<0?"exp":"inc",amount=Math.abs(r.amount);if(!amount)continue;
+      const dd=new Date(r.date).getTime();
+      const man=S.txs.find(x=>(x.src==="manual"||x.src==="quick")&&!x.bankId&&x.type===type&&Math.abs(x.amount-amount)<0.01&&Math.abs(new Date(x.date).getTime()-dd)<=4*864e5);
+      if(man){man.bankId=id;linked++;continue}
+      const g=classify(r.concept,type);
+      const tx={id,bankId:id,type,amount,cat:g.cat,note:prettify(r.concept),date:r.date,src:"import",ts:dd,created:0,review:!g.sure,raw:r.concept};
+      const fx=g.fixedId?S.fixed.find(f=>f.id===g.fixedId):S.fixed.find(f=>(f.type||"exp")===type&&f.match&&(" "+norm(r.concept)+" ").includes(" "+norm(f.match)+" "));
+      if(fx){tx.fixedId=fx.id;tx.cat=fx.cat;tx.review=false;touched.add(fx.id+"|"+ymOf(r.date))}
+      S.txs.push(tx);added++;
+    }
+    // quitar los fijos «auto» que ahora tienen el cargo real del banco
+    S.txs=S.txs.filter(t=>!(t.src==="auto"&&!t.ext&&touched.has(t.fixedId+"|"+ymOf(t.date))));
+    if(balance!=null)S.settings.balance={amount:balance,ts:Date.now(),date:todayISO()};
+    S.settings.csvDate=last;
+    save();render();
+    toast(`${added} movimientos importados${linked?` · ${linked} ya los tenías`:""}${balance!=null?` · saldo ${money(balance)}`:""}`);
+  }catch(e){toast("No se pudo leer el archivo: "+e.message)}
 }
 
 /* ============ Android (Capacitor) ============ */
