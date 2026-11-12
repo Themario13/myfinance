@@ -204,6 +204,12 @@ const dayLabel=s=>{const t=todayISO();if(s===t)return"Hoy";const y=new Date();y.
 const parseAmt=v=>{if(typeof v==="number")return v;v=String(v||"").trim().replace(/\s|€/g,"");if(/,\d{1,2}$/.test(v))v=v.replace(/\./g,"").replace(",",".");else if(/\.\d{3}$/.test(v))v=v.replace(/\./g,"");else v=v.replace(/,/g,"");const n=parseFloat(v);return isFinite(n)?Math.round(n*100)/100:0};
 const amtStr=n=>+n?String(n).replace(".",","):"";
 const norm=s=>String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9&+ ]+/g," ").replace(/\s+/g," ").trim();
+/* ============ Errores: que nunca paren la app y se puedan ver ============ */
+const ERRS=[];
+function logErr(where,e){const m=`${where}: ${e&&e.message||e}`;ERRS.push(m);try{const l=JSON.parse(localStorage.getItem("miscuentas.errs")||"[]");l.unshift(new Date().toLocaleString("es-ES")+" · "+m);localStorage.setItem("miscuentas.errs",JSON.stringify(l.slice(0,15)))}catch(_){}console.error(where,e)}
+function safe(where,fn,fallback){try{return fn()}catch(e){logErr(where,e);return fallback}}
+window.addEventListener("error",e=>logErr("error",e.error||e.message));
+window.addEventListener("unhandledrejection",e=>logErr("promesa",e.reason));
 function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove("show"),2800)}
 
 /* ============ Datos ============ */
@@ -534,8 +540,8 @@ function autoFixed(){
   for(const f of S.fixed){
     if(!f.auto||!(+f.amount)||!fixedDue(f,ym)||fixedPaid(f,ym))continue;
     if(S.bank.sessionId&&!f.ext)continue;                                            // con banco conectado, llega el cargo real
-    if(!f.ext&&S.settings.csvDate&&`${ym}-${pad(day)}`<=S.settings.csvDate)continue;  // ya cubierto por el extracto importado
     const day=Math.min(+f.day||1,daysIn(ym));if(day>d)continue;
+    if(!f.ext&&S.settings.csvDate&&`${ym}-${pad(day)}`<=S.settings.csvDate)continue;  // ya cubierto por el extracto importado
     if(f.since&&`${ym}-${pad(day)}`<f.since)continue;
     const left=Math.round(((+f.amount)-fixedSum(f,ym))*100)/100;if(left<=0)continue;
     S.txs.push({id:uid(),type:f.type||"exp",amount:left,cat:f.cat,note:f.name,date:`${ym}-${pad(day)}`,fixedId:f.id,src:"auto",ts:Date.now(),created:Date.now(),ext:!!f.ext||undefined});n++;
@@ -556,7 +562,8 @@ function render(){
   $("#monthNav").style.visibility=view==="ajustes"?"hidden":"visible";
   $("#mLabel").textContent=monthName(month).replace(" de "," ");
   $("#monthNav").style.visibility=view==="ajustes"||view==="goals"?"hidden":"visible";
-  ({home:renderHome,movs:renderMovs,fijos:renderFijos,goals:renderGoals,ajustes:renderAjustes})[view]();
+  try{({home:renderHome,movs:renderMovs,fijos:renderFijos,goals:renderGoals,ajustes:renderAjustes})[view]()}
+  catch(e){logErr("pantalla "+view,e);$("#main").innerHTML=`<div class="card"><h2>Algo ha fallado</h2><div class="note">No he podido dibujar esta pantalla. Tus datos están a salvo.</div><div class="note" style="margin-top:8px;font-family:ui-monospace,monospace;font-size:11px;color:var(--exp)">${esc(e&&e.message||e)}</div><button class="btn sec block" style="margin-top:12px" onclick="render()">Reintentar</button><button class="btn sec block" style="margin-top:8px" onclick="go('ajustes')">Ir a Ajustes</button></div>`}
 }
 
 /* ============ Inicio ============ */
@@ -603,15 +610,15 @@ function renderHome(){
   if(!S.settings.onboarded)al.push(["g","✨",`Configura tu plan en 1 minuto: nómina, fijos y ahorro. <span class="link" data-act="wizard">Empezar</span>`]);
   else if(!S.settings.personal)al.push(["g","📊",`He preparado tus fijos y límites con tu extracto real. <span class="link" data-act="wizard">Revisar y aplicar</span>`]);
   if(!S.settings.csvDate&&!S.bank.sessionId)al.push(["","📥",`Importa el extracto de imagin (CSV) para tener tu historial y tu saldo real. <span class="link" data-act="csv">Importar</span>`]);
-  for(const r of fixedRises())al.push(["w","📈",`<b>${esc(r.f.name)}</b> ha subido: ${money(r.now)} en ${esc(monthName(r.ym).split(" ")[0])} (sueles pagar ${money(r.f.amount)}). <span class="link" data-rise="${r.f.id}|${r.ym}|${r.now}">Actualizar importe</span> · <span class="link" data-rise-no="${r.f.id}|${r.ym}">Ignorar</span>`]);
+  for(const r of safe("subidas",fixedRises,[]))al.push(["w","📈",`<b>${esc(r.f.name)}</b> ha subido: ${money(r.now)} en ${esc(monthName(r.ym).split(" ")[0])} (sueles pagar ${money(r.f.amount)}). <span class="link" data-rise="${r.f.id}|${r.ym}|${r.now}">Actualizar importe</span> · <span class="link" data-rise-no="${r.f.id}|${r.ym}">Ignorar</span>`]);
   for(const c of catsOf("exp")){if(!(+c.budget)||!isCur)continue;const sp=spentCat(month,c.id);
     if(sp>c.budget)al.push(["e",c.icon,`Te has pasado en <b>${esc(c.name)}</b>: ${money0(sp)} de ${money0(c.budget)}`]);}
   const review=S.txs.filter(t=>t.review).length;
   if(review)al.push(["","🏷️",`${review} movimiento${review>1?"s":""} sin categoría clara. <span class="link" data-act="review">Revisar</span>`]);
   if(S.bank.sessionId&&S.bank.validUntil&&new Date(S.bank.validUntil)-Date.now()<7*864e5)al.push(["e","🔑",`El permiso de tu banco caduca pronto. <span class="link" data-act="ajustes">Renovar</span>`]);
-  const tm=totalMoney(),HL=huchas().list.filter(h=>!h.g.archived);
+  const tm=safe("saldo",totalMoney,null),HL=safe("huchas",()=>huchas().list.filter(h=>!h.g.archived),[]);
   const lims=catsOf("exp").filter(c=>+c.budget>0);
-  const T=S.settings.personal&&isCur?tips():[];
+  const T=S.settings.personal&&isCur?safe("consejos",tips,[]):[];
   $("#main").innerHTML=`
   <div class="card hero ${bad?"bad":""}">
     <div class="hero-top">
@@ -628,7 +635,7 @@ function renderHome(){
       <div class="pill"><small>${goal?"Ahorras este mes":"Fijos pend."}</small><b class="num">${goal?esc(money0(past?P.inc-P.exp:Math.max(0,P.savedProj))):esc(money0(P.fixPending))}</b></div>
     </div>
   </div>
-  ${isCur?closingCard():""}
+  ${isCur?safe("cierre",closingCard,""):""}
   ${al.length?`<div class="card"><h2>Avisos</h2>${al.map(a=>`<div class="alert ${a[0]}"><span class="e1">${a[1]}</span><div>${a[2]}</div></div>`).join("")}</div>`:""}
   ${HL.length?`<div class="card"><h2>🎯 Tus objetivos <a data-act="goals">Ver</a></h2>
     ${HL.map(h=>`<div class="lim tap" data-act="goals"><div class="mini" style="align-items:baseline"><span style="color:var(--text);font-weight:600">${esc(h.g.icon||"🎯")} ${esc(h.g.name)}</span><span><b class="num" style="font-size:17px;${h.avail<0?"color:var(--exp)":""}">${esc(money0(h.avail))}</b>${h.g.target?`<span class="muted"> / ${esc(money0(h.g.target))}</span>`:""}</span></div>
@@ -821,7 +828,9 @@ function renderAjustes(){
     <label class="btn sec block" style="margin-top:8px">Restaurar desde archivo<input type="file" id="imp" accept=".json,application/json" hidden></label>
     <button class="btn danger block" style="margin-top:8px" id="wipe">Borrar todos los datos</button>
   </div>
+  ${(()=>{let l=[];try{l=JSON.parse(localStorage.getItem("miscuentas.errs")||"[]")}catch(_){}return l.length?`<div class="card"><h2>Diagnóstico <a id="errClr">Borrar</a></h2><div class="note">Si algo falla, copia esto y pásamelo:</div><div style="font-family:ui-monospace,monospace;font-size:11px;color:var(--muted);margin-top:8px;max-height:160px;overflow:auto">${l.map(esc).join("<br>")}</div><button class="btn sec block" id="errCopy" style="margin-top:10px">Copiar errores</button></div>`:""})()}
   <div class="note" style="text-align:center;margin:10px 0 20px">Mis Cuentas · hecha para ti</div>`;
+  {const ec=$("#errCopy");if(ec)ec.onclick=async()=>{try{await navigator.clipboard.writeText(localStorage.getItem("miscuentas.errs")||"");toast("Copiado")}catch(e){toast("No se pudo copiar")}};const ex=$("#errClr");if(ex)ex.onclick=()=>{localStorage.removeItem("miscuentas.errs");renderAjustes()}}
   document.querySelectorAll("[data-go]").forEach(r=>r.onclick=()=>({nomina:()=>openFixed(nomina()||{type:"inc",cat:"nomina",name:"Nómina",day:28,auto:true,match:"nomina"}),balance:openBalance,goal:()=>go("goals"),fijos:()=>go("fijos"),limits:openLimits})[r.dataset.go]());
   $("#reWiz").onclick=openWizard;
   $("#csvBtn").onclick=pickCSV;
@@ -1278,21 +1287,43 @@ async function bankSync(manual){
 }
 function prettify(s){s=String(s).replace(/\s+/g," ").trim();if(s===s.toUpperCase())s=s.toLowerCase().replace(/(^|\s)\S/g,m=>m.toUpperCase());return s.slice(0,60)}
 
+/* ============ Deslizar hacia abajo para actualizar ============ */
+async function refreshAll(){
+  safe("fijos automáticos",autoFixed);
+  await takePending();
+  if(S.bank.sessionId)await bankSync(true);
+  safe("resumen",pushNative);render();toast("Actualizado ✓");
+}
+(function(){
+  const ind=document.createElement("div");ind.id="ptr";
+  ind.style.cssText="position:fixed;left:50%;top:calc(var(--top) + 8px);z-index:30;width:38px;height:38px;margin-left:-19px;border-radius:50%;background:var(--card2);border:1px solid var(--line);display:grid;place-items:center;color:var(--mint);font-size:18px;transform:translateY(-70px);transition:transform .2s;box-shadow:0 6px 18px rgba(0,0,0,.35)";
+  ind.textContent="↻";document.body.appendChild(ind);
+  let y0=null,dy=0,busy=false;
+  window.addEventListener("touchstart",e=>{if(busy||window.scrollY>0||sheetEl||document.querySelector(".wiz"))return;y0=e.touches[0].clientY;dy=0},{passive:true});
+  window.addEventListener("touchmove",e=>{if(y0==null)return;dy=e.touches[0].clientY-y0;if(dy<=0){ind.style.transform="translateY(-70px)";return}
+    const p=Math.min(dy,120);ind.style.transition="none";ind.style.transform=`translateY(${p*0.6-70}px) rotate(${p*3}deg)`;ind.style.opacity=Math.min(1,p/70)},{passive:true});
+  window.addEventListener("touchend",async()=>{if(y0==null)return;const go=dy>80;y0=null;ind.style.transition="transform .2s";
+    if(!go){ind.style.transform="translateY(-70px)";return}
+    busy=true;ind.style.transform="translateY(10px)";ind.innerHTML='<span class="spin"></span>';
+    try{await refreshAll()}catch(e){logErr("actualizar",e)}
+    busy=false;ind.textContent="↻";ind.style.transform="translateY(-70px)"});
+})();
+
 /* ============ Arranque ============ */
-load();
+safe("cargar",load);if(!S)S=freshState();
 if(!S.bank.redirect)S.bank.redirect=REDIRECT_DEFAULT;
-autoFixed();
+safe("fijos automáticos",autoFixed);
 render();
 if(!S.settings.onboarded)setTimeout(openWizard,250);
 if(isNative){
-  takePending();pushNative();
+  takePending();safe("resumen",pushNative);
   if(QuickAdd){
     if(!S.settings.notifAsked&&S.settings.onboarded){S.settings.notifAsked=true;S.settings.notif=true;save()}
     if(S.settings.notif)QuickAdd.setNotification({enabled:true}).then(r=>{if(r&&r.permission===false)toast("Permite las notificaciones para ver tu resumen y el botón de anotar")}).catch(e=>toast("Notificación: "+e.message));
   }
   setTimeout(()=>bankSync(false),800);
   if(AppP){
-    AppP.addListener("appStateChange",st=>{if(st.isActive){autoFixed();takePending();if(S.settings.notif&&QuickAdd)QuickAdd.setNotification({enabled:true}).catch(()=>{});pushNative();bankSync(false);render()}});
+    AppP.addListener("appStateChange",st=>{if(st.isActive){safe("fijos automáticos",autoFixed);takePending();if(S.settings.notif&&QuickAdd)QuickAdd.setNotification({enabled:true}).catch(()=>{});pushNative();bankSync(false);render()}});
     AppP.addListener("resume",()=>{takePending();pushNative()});
     document.addEventListener("visibilitychange",()=>{if(!document.hidden)takePending()});
     AppP.addListener("appUrlOpen",d=>{if(d&&d.url&&/[?&](code|error)=/.test(d.url))handleAuthUrl(d.url)});
