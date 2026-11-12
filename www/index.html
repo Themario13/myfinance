@@ -242,50 +242,49 @@ const DEFAULT_CATS=[
  {id:"otrosi",name:"Otros ingresos",icon:"💰",color:"#a3e635",type:"inc",budget:0},
 ];
 // medias reales de tu extracto (sep-nov 2026), redondeadas
-const LIMIT_SUGGEST={super:120,ocio:200,transporte:130,tools:60,subs:30,casa:60,ropa:50,otros:80};
+const LIMIT_SUGGEST={super:250,ocio:120,transporte:100,casa:60,ropa:50,ocio_x:0,salud:40,cuidado:30,coche:60,subs:25,tools:20,regalos:20,otros:60};
 const AVG_VARIABLE_DEFAULT=750; // lo que te cuesta el día a día de media según el extracto
 const avgVariable=()=>{const st=catStats();return st.months?Math.round(Object.values(st.avg).reduce((a,b)=>a+b,0)):AVG_VARIABLE_DEFAULT};
 const DEFAULT_RULES={
- super:"guisson corp alim canolich mercadona carrefour lidl aldi eroski alcampo consum hipercor bonpreu bon preu condis ahorramas caprabo supercor gadis froiz masymas spar coviran dia supermercado hiper",
- ocio:"pub kebab pulperia parrilla rincon del gin mar de aral casino pooltarra mc donalds mdonalnds titanic setiles salda bizum enviado restaurante bar cafeteria cafe burger mcdonald telepizza dominos glovo just eat uber eats deliveroo starbucks cine cines ticketmaster kfc taberna cerveceria pizzeria vips foster tgb goiko",
+ super:"mercadona carrefour lidl aldi eroski alcampo consum hipercor bonpreu bon preu condis ahorramas caprabo supercor gadis froiz masymas spar coviran dia supermercado hiper",
+ ocio:"restaurante bar cafeteria pub cerveceria taberna pizzeria kebab mc donalds burger bar cafeteria cafe burger mcdonald telepizza dominos glovo just eat uber eats deliveroo starbucks cine cines ticketmaster kfc taberna cerveceria pizzeria vips foster tgb goiko",
  coche:"taller itv neumaticos norauto midas feu vert lavado coche recambios",
  tabaco:"estanco tabacos tabaco expendeduria",
  pesca:"pesca cebos caza y pesca pescador",
  viajes:"holafly booking airbnb hotel hostal",
- cuidado:"peluqueria barberia barber estetica",
+ cuidado:"peluqueria barberia barber estetica depilacion laser cera manicura unas spa",
  transporte:"moeve benzina carburant venta billetes repsol cepsa galp shell gasolinera estacion de servicio ballenoil plenoil petroprix renfe metro emt cabify uber bolt freenow parking aparcamiento autopista peaje ryanair vueling blablacar alsa itv taller",
  suministros:"papernest elect papernest iberdrola endesa naturgy totalenergies holaluz octopus canal de isabel aguas agua agbar aqualia emasesa electricidad gas natural luz",
  internet:"movistar vodafone orange digi yoigo pepephone masmovil simyo lowi jazztel finetwork o2 telefonica",
- tools:"higgsfi higgsfield artlist mailtool openai nominalia link com",
- subs:"g1sk002m google play onlyfans netflix spotify hbo disney amazon prime prime video youtube apple com icloud google one dazn filmin openai chatgpt anthropic claude audible playstation xbox steam",
- salud:"psicologo psicologa sesion crossfit gimnasio gym farmacia sanitas adeslas dkv asisa clinica dentista dental optica fisioterapia hospital",
+ tools:"openai chatgpt midjourney notion canva adobe github figma",
+ subs:"netflix spotify hbo disney amazon prime prime video youtube apple com icloud google one dazn filmin openai chatgpt anthropic claude audible playstation xbox steam",
+ salud:"psicologo psicologa fisio fisioterapia crossfit gimnasio gym padel farmacia sanitas adeslas dkv asisa clinica dentista dental optica fisioterapia hospital",
  ropa:"zara primark pull&bear bershka h&m mango decathlon stradivarius massimo dutti lefties shein zalando nike adidas springfield",
- casa:"todo 100 ikea leroy merlin bricomart brico depot conforama maisons du monde jysk mediamarkt worten kave home sklum aki ferreteria",
+ casa:"ikea leroy merlin bricomart brico depot conforama maisons du monde jysk mediamarkt worten kave home sklum aki ferreteria",
  hipoteca:"hipoteca prestamo hipotecario cuota prestamo amortizacion",
- comunidad:"nuestra senora comunidad de propietarios comunidad prop cdad prop administracion de fincas administrador fincas",
- seguros:"mybox tributos diputac seguro seguros mapfre mutua madrilena linea directa axa allianz generali ocaso ibi ayuntamiento agencia tributaria aeat impuesto tasa basura",
+ comunidad:"comunidad de propietarios comunidad prop cdad prop administracion de fincas administrador fincas",
+ seguros:"seguro seguros mapfre mutua madrilena linea directa axa allianz generali ocaso ibi ayuntamiento agencia tributaria aeat impuesto tasa basura",
  nomina:"nomina trf nomina salario haberes",
  devol:"bizum recibido transf a su favor",
  extra:"div ishares div arcelor dividendo",
  otrosi:"transferencia recibida devolucion abono reembolso",
 };
 const FIXED_TEMPLATES=[
- {name:"Hipoteca",cat:"hipoteca",day:1,match:"pres 32682017101",amount:299.93},
- {name:"Comunidad",cat:"comunidad",day:5,match:"nuestra senora",amount:190.95,hint:"con calefacción y agua caliente"},
- {name:"Mantenimiento portal",cat:"comunidad",day:3,match:"pago transferencias",amount:40},
- {name:"Seguro MyBox",cat:"seguros",day:1,match:"mybox",amount:55.67},
- {name:"Luz",cat:"suministros",day:20,match:"papernest",amount:36,hint:"Papernest, varía 32-39 €"},
- {name:"Móvil Digi",cat:"internet",day:29,match:"digi",amount:10},
- {name:"Psicólogo",cat:"salud",day:7,match:"mario",amount:140,hint:"2 sesiones de 70 €"},
- {name:"CrossFit",cat:"salud",day:1,match:"crossfit",amount:35,ext:true,hint:"se paga desde otra cuenta"},
- {name:"Claude",cat:"tools",day:5,match:"anthropic",amount:18},
- {name:"Google One",cat:"subs",day:2,match:"google one",amount:1.99},
- {name:"Ahorro a otra cuenta",cat:"ahorro",day:1,match:"pago traspasos",amount:70,hint:"cuenta como ahorro, no como gasto"},
- {name:"Tributos Diputación",cat:"seguros",day:14,match:"tributos",amount:84.41,freq:"y",month:10,hint:"IBI y tasas"},
- {name:"Agua",cat:"suministros",day:15,match:"",amount:0,off:true},
- {name:"Internet casa",cat:"internet",day:3,match:"",amount:0,off:true},
+ {name:"Alquiler o hipoteca",cat:"hipoteca",day:1,match:"",amount:0,freq:"m"},
+ {name:"Comunidad",cat:"comunidad",day:5,match:"comunidad",amount:0,freq:"m"},
+ {name:"Luz",cat:"suministros",day:15,match:"",amount:0,freq:"m"},
+ {name:"Agua",cat:"suministros",day:15,match:"",amount:0,freq:"m"},
+ {name:"Gas",cat:"suministros",day:15,match:"",amount:0,freq:"m"},
+ {name:"Internet",cat:"internet",day:3,match:"",amount:0,freq:"m"},
+ {name:"Móvil",cat:"internet",day:3,match:"",amount:0,freq:"m"},
+ {name:"Seguro del hogar",cat:"seguros",day:1,match:"",amount:0,freq:"m"},
+ {name:"Seguro del coche",cat:"seguros",day:1,match:"",amount:0,freq:"m"},
+ {name:"Gimnasio",cat:"salud",day:1,match:"",amount:0,freq:"m"},
+ {name:"Suscripciones",cat:"subs",day:1,match:"",amount:0,freq:"m"},
+ {name:"Préstamo",cat:"hipoteca",day:1,match:"",amount:0,freq:"m"},
+ {name:"IBI (una vez al año)",cat:"seguros",day:1,match:"ibi",amount:0,freq:"y",month:10},
 ];
-function freshState(){return{v:2,goals:[],txs:[],cats:DEFAULT_CATS.map(c=>({...c})),fixed:[],rules:[],settings:{balance:null,saveGoal:0,goalName:"Ahorro para el piso",onboarded:false,notif:false,notifAsked:false},bank:{appId:"",pem:"",redirect:"",aspsp:"",country:"ES",sessionId:"",validUntil:"",accounts:[],lastSync:0,pendingState:""}}}
+function freshState(){return{v:2,goals:[],txs:[],cats:DEFAULT_CATS.map(c=>({...c})),fixed:[],rules:[],settings:{balance:null,saveGoal:0,goalName:"Mi ahorro",onboarded:false,notif:false,notifAsked:false},bank:{appId:"",pem:"",redirect:"",aspsp:"",country:"ES",sessionId:"",validUntil:"",accounts:[],lastSync:0,pendingState:""}}}
 let S;
 function normalize(){
   const f=freshState();
@@ -608,7 +607,7 @@ function renderHome(){
   // avisos (solo lo importante)
   const al=[];
   if(!S.settings.onboarded)al.push(["g","✨",`Configura tu plan en 1 minuto: nómina, fijos y ahorro. <span class="link" data-act="wizard">Empezar</span>`]);
-  else if(!S.settings.personal)al.push(["g","📊",`He preparado tus fijos y límites con tu extracto real. <span class="link" data-act="wizard">Revisar y aplicar</span>`]);
+  else if(!S.settings.personal&&S.settings.csvDate)al.push(["g","📊",`He preparado tus fijos y límites con tu extracto. <span class="link" data-act="wizard">Revisar y aplicar</span>`]);
   if(!S.settings.csvDate&&!S.bank.sessionId)al.push(["","📥",`Importa el extracto de imagin (CSV) para tener tu historial y tu saldo real. <span class="link" data-act="csv">Importar</span>`]);
   for(const r of safe("subidas",fixedRises,[]))al.push(["w","📈",`<b>${esc(r.f.name)}</b> ha subido: ${money(r.now)} en ${esc(monthName(r.ym).split(" ")[0])} (sueles pagar ${money(r.f.amount)}). <span class="link" data-rise="${r.f.id}|${r.ym}|${r.now}">Actualizar importe</span> · <span class="link" data-rise-no="${r.f.id}|${r.ym}">Ignorar</span>`]);
   for(const c of catsOf("exp")){if(!(+c.budget)||!isCur)continue;const sp=spentCat(month,c.id);
@@ -1132,8 +1131,8 @@ function openWizard(){
   const nom=nomina();
   const P1=!!S.settings.personal; // ¿ya aplicó sus datos reales?
   const OLD_GENERIC=["Gas","Seguro de hogar","IBI","Internet y móvil"];
-  const W={step:0,nomAmt:nom&&(P1||nom.amount===1599.8)?nom.amount:1599.80,nomDay:nom&&P1?nom.day:30,bal:totalMoney()?.v??"",
-    fixed:FIXED_TEMPLATES.map(t=>{const ex=S.fixed.find(f=>f.name===t.name);return{...t,amount:P1&&ex?ex.amount:(t.amount||(ex?ex.amount:0)),on:P1?!!ex:!t.off}}),
+  const W={step:0,nomAmt:P1&&nom?nom.amount:(nom?nom.amount:0),nomDay:nom?nom.day:28,bal:totalMoney()?.v??"",
+    fixed:FIXED_TEMPLATES.map(t=>{const ex=S.fixed.find(f=>f.name===t.name);return{...t,amount:ex?ex.amount:0,on:!!ex}}),
     extra:S.fixed.filter(f=>f.type!=="inc"&&!FIXED_TEMPLATES.some(t=>t.name===f.name)).map(f=>({...f,on:P1||!OLD_GENERIC.includes(f.name)})),
     goal:activeGoals()[0]?+activeGoals()[0].monthly||0:0,others:activeGoals().slice(1).reduce((a,g)=>a+(+g.monthly||0),0),goalName:activeGoals()[0]?activeGoals()[0].name:"Piso (Reforma y muebles)",
     lims:Object.fromEntries(Object.keys(LIMIT_SUGGEST).map(k=>[k,P1&&+cat(k).budget?+cat(k).budget:LIMIT_SUGGEST[k]]))};
@@ -1157,7 +1156,7 @@ function openWizard(){
       <div class="mini tot"><span><b>Para el día a día</b></span><b class="num" id="wFree">${money0(free-W.goal)}</b></div><div class="note" id="wPerDay" style="text-align:right">≈ ${money0((free-W.goal)/30)} al día</div></div>
       ${(()=>{const AVG_VARIABLE=avgVariable();return `<div class="alert ${free-AVG_VARIABLE<W.goal?"w":"g"}" style="margin-top:12px"><span class="e1">📊</span><div>Según tu extracto, tu día a día (súper, gasolina, salir…) te cuesta unos <b>${money0(AVG_VARIABLE)}/mes</b>. Al ritmo de ahora ahorrarías unos <b>${money0(Math.max(0,free-AVG_VARIABLE))}</b>. Para ahorrar más hay que recortar sobre todo en bares y restaurantes.</div></div>`})()}`},
     ()=>`<div class="emoji">🧭</div><h2>Tus límites</h2><p class="lead">He repartido lo que te queda para el día a día según cómo gastas de verdad. Toca cualquier cifra y reajusto el resto.</p><div id="wLims"></div>`,
-    ()=>`<div class="emoji">🎉</div><h2>¡Listo, Mario!</h2><p class="lead">Tu plan está hecho. Esto es lo que verás arriba del todo:</p>
+    ()=>`<div class="emoji">🎉</div><h2>¡Todo listo! 🎉</h2><p class="lead">Tu plan está hecho. Esto es lo que verás arriba del todo:</p>
       <div class="calc"><div class="mini"><span>Nómina</span><b class="num inc">${money0(+W.nomAmt||0)}</b></div><div class="mini"><span>Fijos</span><b class="num">−${money0(fixedTot())}</b></div><div class="mini"><span>${esc(W.goalName)}</span><b class="num">−${money0(W.goal)}</b></div>${yearTot()?`<div class="mini"><span>Anuales (al mes)</span><b class="num">−${money0(yearTot()/12)}</b></div>`:""}<div class="mini tot"><span><b>Puedes gastar al mes</b></span><b class="num" style="color:var(--mint)">${money0((+W.nomAmt||0)-fixedTot()-yearTot()/12-W.goal)}</b></div></div>
       <p class="note" style="margin-top:16px">${isNative?"Activa la <b>notificación fija</b> para anotar sin abrir la app y ver siempre cuánto te queda.":"En la app de Android tendrás la notificación fija y el widget."}</p>
       ${isNative?`<div class="set-row" style="border:0"><div class="mid"><b>Notificación fija</b></div><button class="sw ${S.settings.notif||!S.settings.notifAsked?"on":""}" id="wNotif"></button></div>`:""}`
