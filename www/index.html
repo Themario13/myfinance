@@ -727,10 +727,13 @@ if(!S.bank.redirect)S.bank.redirect=REDIRECT_DEFAULT;
 render();
 if(isNative){
   takePending();pushNative();
-  if(S.settings.notif&&QuickAdd)QuickAdd.setNotification({enabled:true}).catch(()=>{});
+  if(QuickAdd){
+    if(!S.settings.notifAsked){S.settings.notifAsked=true;S.settings.notif=true;save()}
+    if(S.settings.notif)QuickAdd.setNotification({enabled:true}).then(r=>{if(r&&r.permission===false)toast("Permite las notificaciones para ver los botones de anotar")}).catch(e=>toast("Notificación: "+e.message));
+  }
   setTimeout(()=>bankSync(false),800);
   if(AppP){
-    AppP.addListener("appStateChange",st=>{if(st.isActive){takePending();pushNative();bankSync(false)}});
+    AppP.addListener("appStateChange",st=>{if(st.isActive){takePending();if(S.settings.notif&&QuickAdd)QuickAdd.setNotification({enabled:true}).catch(()=>{});pushNative();bankSync(false)}});
     AppP.addListener("appUrlOpen",d=>{if(d&&d.url&&/[?&](code|error)=/.test(d.url))handleAuthUrl(d.url)});
     AppP.getLaunchUrl&&AppP.getLaunchUrl().then(d=>{if(d&&d.url&&/[?&](code|error)=/.test(d.url))handleAuthUrl(d.url)}).catch(()=>{});
   }

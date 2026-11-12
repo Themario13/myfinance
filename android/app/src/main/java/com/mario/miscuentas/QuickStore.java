@@ -23,7 +23,7 @@ import org.json.JSONObject;
 /** Almacén compartido entre la app, la notificación y el widget. */
 public class QuickStore {
     static final String PREFS = "quickadd";
-    static final String CHANNEL = "quick_add";
+    static final String CHANNEL = "quick_add_v2";
     static final int NOTIF_ID = 4242;
     static final String KEY_TEXT = "quick_text";
     static final String ACTION_ADD = "com.mario.miscuentas.QUICK_ADD";
@@ -95,11 +95,16 @@ public class QuickStore {
 
     static void ensureChannel(Context c) {
         if (Build.VERSION.SDK_INT >= 26) {
-            NotificationChannel ch = new NotificationChannel(CHANNEL, "Anotar rápido", NotificationManager.IMPORTANCE_LOW);
+            NotificationChannel ch = new NotificationChannel(CHANNEL, "Anotar rápido", NotificationManager.IMPORTANCE_DEFAULT);
             ch.setDescription("Notificación fija para anotar gastos e ingresos");
             ch.setShowBadge(false);
+            ch.setSound(null, null);
+            ch.enableVibration(false);
             NotificationManager nm = c.getSystemService(NotificationManager.class);
-            if (nm != null) nm.createNotificationChannel(ch);
+            if (nm != null) {
+                nm.deleteNotificationChannel("quick_add");
+                nm.createNotificationChannel(ch);
+            }
         }
     }
 
@@ -138,7 +143,7 @@ public class QuickStore {
                 .setOnlyAlertOnce(true)
                 .setShowWhen(false)
                 .setSilent(true)
-                .setPriority(NotificationCompat.PRIORITY_LOW)
+                .setPriority(NotificationCompat.PRIORITY_DEFAULT)
                 .setCategory(NotificationCompat.CATEGORY_STATUS)
                 .setContentIntent(openPi)
                 .addAction(aExp)
