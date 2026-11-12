@@ -56,6 +56,7 @@ public class QuickAddPlugin extends Plugin {
                 .putString("weekStart", call.getString("weekStart", ""))
                 .putString("weekSpent", String.valueOf(call.getDouble("weekSpent", 0.0)))
                 .putString("weekCats", call.getString("weekCats", ""))
+                .putString("cats", call.getString("cats", ""))
                 .apply();
         QuickStore.scheduleWeekly(c);
         if (QuickStore.notifEnabled(c)) QuickStore.showNotification(c, null);
@@ -68,6 +69,21 @@ public class QuickAddPlugin extends Plugin {
     public void setWeekly(PluginCall call) {
         boolean on = Boolean.TRUE.equals(call.getBoolean("enabled", true));
         QuickStore.prefs(getContext()).edit().putBoolean("weekly", on).apply();
+        call.resolve();
+    }
+
+    @PluginMethod
+    public void peekPending(PluginCall call) {
+        JSObject r = new JSObject();
+        r.put("items", QuickStore.peekPending(getContext()));
+        call.resolve(r);
+    }
+
+    @PluginMethod
+    public void ackPending(PluginCall call) {
+        Double upTo = call.getDouble("upTo", 0.0);
+        QuickStore.ackPending(getContext(), upTo == null ? 0 : upTo.longValue());
+        QuickStore.updateWidgets(getContext());
         call.resolve();
     }
 

@@ -41,7 +41,8 @@ public class QuickAddWidget extends AppWidgetProvider {
             v.setViewVisibility(R.id.w_bar_warn, s.warn ? View.VISIBLE : View.GONE);
             v.setViewVisibility(R.id.w_bar_bad, s.bad ? View.VISIBLE : View.GONE);
             v.setOnClickPendingIntent(R.id.w_root, openPi);
-            v.setOnClickPendingIntent(R.id.w_add, addIntent(c));
+            v.setOnClickPendingIntent(R.id.w_add, QuickStore.quickIntent(c, "exp", 202));
+            v.setOnClickPendingIntent(R.id.w_inc, QuickStore.quickIntent(c, "inc", 203));
             m.updateAppWidget(id, v);
         }
     }

@@ -132,7 +132,11 @@ public class QuickStore {
         return s;
     }
 
-    static synchronized void addPending(Context c, String type, double amount, String note) {
+    static void addPending(Context c, String type, double amount, String note) {
+        addPending(c, type, amount, note, null);
+    }
+
+    static synchronized void addPending(Context c, String type, double amount, String note, String cat) {
         SharedPreferences p = prefs(c);
         try {
             JSONArray arr = new JSONArray(p.getString("pending", "[]"));
@@ -140,9 +144,13 @@ public class QuickStore {
             o.put("type", type);
             o.put("amount", amount);
             o.put("note", note == null ? "" : note);
-            o.put("ts", System.currentTimeMillis());
+            long ts = System.currentTimeMillis();
+            long last = p.getLong("lastTs", 0);
+            if (ts <= last) ts = last + 1; // marca única por anotación
+            o.put("ts", ts);
+            if (cat != null && !cat.isEmpty()) o.put("cat", cat);
             arr.put(o);
-            SharedPreferences.Editor e = p.edit().putString("pending", arr.toString());
+            SharedPreferences.Editor e = p.edit().putString("pending", arr.toString()).putLong("lastTs", ts);
             // ajustamos el resumen al momento, sin esperar a abrir la app
             if (p.getBoolean("hasPlan", false) && curYM().equals(p.getString("ym", ""))) {
                 double can = getD(p, "canSpend");
@@ -153,6 +161,25 @@ public class QuickStore {
                 e.putString("weekSpent", String.valueOf(getD(p, "weekSpent") + amount));
             }
             e.apply();
+        } catch (JSONException ignored) {
+        }
+    }
+
+    /** Lee sin borrar: se borran solo cuando la app confirma que las ha guardado. */
+    static synchronized String peekPending(Context c) {
+        return prefs(c).getString("pending", "[]");
+    }
+
+    static synchronized void ackPending(Context c, long upTo) {
+        SharedPreferences p = prefs(c);
+        try {
+            JSONArray arr = new JSONArray(p.getString("pending", "[]"));
+            JSONArray keep = new JSONArray();
+            for (int i = 0; i < arr.length(); i++) {
+                JSONObject o = arr.getJSONObject(i);
+                if (o.optLong("ts", 0) > upTo) keep.put(o);
+            }
+            p.edit().putString("pending", keep.toString()).apply();
         } catch (JSONException ignored) {
         }
     }
@@ -205,6 +232,14 @@ public class QuickStore {
         return PendingIntent.getBroadcast(c, req, i, flags);
     }
 
+    /** Abre la ventanita de anotar (gasto o ingreso) encima de lo que estés haciendo. */
+    static PendingIntent quickIntent(Context c, String type, int req) {
+        Intent i = new Intent(c, QuickAddActivity.class);
+        i.putExtra("type", type);
+        i.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+        return PendingIntent.getActivity(c, req, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+    }
+
     static PendingIntent openApp(Context c, int req) {
         Intent open = new Intent(c, MainActivity.class);
         open.setFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -236,9 +271,8 @@ public class QuickStore {
         ensureChannels(c);
         Summary s = summary(c);
 
-        RemoteInput riExp = new RemoteInput.Builder(KEY_TEXT).setLabel("Importe y concepto · ej: 12,50 mercadona").build();
-        NotificationCompat.Action aExp = new NotificationCompat.Action.Builder(R.drawable.ic_stat_money, "+ Añadir gasto", replyIntent(c, "exp", 101))
-                .addRemoteInput(riExp).setAllowGeneratedReplies(false).build();
+        NotificationCompat.Action aExp = new NotificationCompat.Action.Builder(R.drawable.ic_stat_money, "− Gasto", quickIntent(c, "exp", 111)).build();
+        NotificationCompat.Action aInc = new NotificationCompat.Action.Builder(R.drawable.ic_stat_money, "+ Ingreso", quickIntent(c, "inc", 112)).build();
 
         Notification n = new NotificationCompat.Builder(c, CHANNEL)
                 .setSmallIcon(R.drawable.ic_stat_money)
@@ -256,6 +290,7 @@ public class QuickStore {
                 .setCategory(NotificationCompat.CATEGORY_STATUS)
                 .setContentIntent(openApp(c, 103))
                 .addAction(aExp)
+                .addAction(aInc)
                 .build();
         try {
             NotificationManagerCompat.from(c).notify(NOTIF_ID, n);
@@ -366,6 +401,13 @@ public class QuickStore {
         AppWidgetManager m = AppWidgetManager.getInstance(c);
         int[] ids = m.getAppWidgetIds(new ComponentName(c, QuickAddWidget.class));
         if (ids != null && ids.length > 0) QuickAddWidget.updateAll(c, m, ids);
+    }
+
+    static String recordFull(Context c, String type, double amount, String note, String cat) {
+        addPending(c, type, amount, note, cat);
+        updateWidgets(c);
+        checkAlert(c);
+        return ("inc".equals(type) ? "✓ Ingreso anotado: " : "✓ Gasto anotado: ") + money(amount) + (note == null || note.isEmpty() ? "" : " · " + note);
     }
 
     /** Guarda una anotación, refresca widget y avisos. Devuelve el texto de confirmación o null si no hay importe. */

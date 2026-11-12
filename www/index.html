@@ -786,7 +786,7 @@ function renderAjustes(){
     <button class="btn sec block" style="margin-top:10px" id="reWiz">Repetir el asistente</button>
   </div>
   <div class="card"><h2>Anotar sin abrir la app</h2>
-    <div class="set-row"><div class="mid"><b>Notificación fija</b><div class="s">Tu resumen y el botón «+ Gasto». Escribe «12,50 mercadona» y listo.</div></div><button class="sw ${S.settings.notif?"on":""}" id="swNotif" ${isNative?"":"disabled"}></button></div>
+    <div class="set-row"><div class="mid"><b>Notificación fija</b><div class="s">Tu resumen y los botones «− Gasto» y «+ Ingreso»: se abre una ventanita para poner importe y categoría.</div></div><button class="sw ${S.settings.notif?"on":""}" id="swNotif" ${isNative?"":"disabled"}></button></div>
     <div class="set-row"><div class="mid"><b>Resumen del domingo</b><div class="s">Cada domingo a las 21:00, cómo te ha ido la semana.</div></div><button class="sw ${S.settings.weekly!==false?"on":""}" id="swWeek" ${isNative?"":"disabled"}></button></div>
     <div class="set-row"><div class="mid"><b>Aviso de ahorro</b><div class="s">Te llega una notificación cuando empiezas a comerte el ahorro del mes.</div></div><span class="tag auto">siempre</span></div>
     <div class="set-row"><div class="mid"><b>Widget</b><div class="s">Mantén pulsada la pantalla de inicio → Widgets → Mis Cuentas.</div></div></div>
@@ -1147,16 +1147,32 @@ function pushNative(){
   pushT=setTimeout(()=>{
     const ym=curYM(),P=plan(ym);
     const wk=weekData();
-    QuickAdd.updateSummary({weekStart:wk.start,weekSpent:+wk.spent.toFixed(2),weekCats:wk.text,ym,hasPlan:P.has,canSpend:+P.canSpend.toFixed(2),spendable:+P.spendable.toFixed(2),goal:+P.goal.toFixed(2),goalName:S.settings.goalName||"Ahorro",
+    const catsJ=JSON.stringify(S.cats.filter(c=>!c.saving&&!["hipoteca","comunidad"].includes(c.id)).map(c=>({id:c.id,name:c.name,icon:c.icon,type:c.type})));
+    QuickAdd.updateSummary({cats:catsJ,weekStart:wk.start,weekSpent:+wk.spent.toFixed(2),weekCats:wk.text,ym,hasPlan:P.has,canSpend:+P.canSpend.toFixed(2),spendable:+P.spendable.toFixed(2),goal:+P.goal.toFixed(2),goalName:S.settings.goalName||"Ahorro",
       text:P.has?"":`Este mes llevas ${money0(P.exp)} gastados`}).catch(()=>{});
   },300);
 }
+/** Recoge lo anotado desde la notificación o el widget. Solo se borra allí cuando ya está guardado aquí. */
+let taking=false;
 async function takePending(){
-  if(!QuickAdd)return;
-  try{const r=await QuickAdd.takePending();const items=JSON.parse(r.items||"[]");if(!items.length)return;
-    for(const it of items){const g=classify(it.note,it.type);S.txs.push({id:uid(),type:it.type,amount:Math.round(it.amount*100)/100,cat:g.cat,note:it.note||"",date:iso(new Date(it.ts)),src:"quick",ts:it.ts,created:it.ts,review:!g.sure&&!!it.note})}
-    save();render();toast(`${items.length} anotación${items.length>1?"es":""} desde la notificación ✓`);
-  }catch(e){}
+  if(!QuickAdd||taking)return;taking=true;
+  try{
+    const r=await (QuickAdd.peekPending?QuickAdd.peekPending():QuickAdd.takePending());
+    const items=JSON.parse((r&&r.items)||"[]");if(!items.length)return;
+    let n=0,maxTs=0;
+    for(const it of items){
+      maxTs=Math.max(maxTs,+it.ts||0);
+      const id="q"+it.ts;if(S.txs.some(t=>t.id===id))continue;
+      const type=it.type==="inc"?"inc":"exp";
+      const chosen=it.cat&&S.cats.some(c=>c.id===it.cat&&c.type===type)?it.cat:null;
+      const g=chosen?{cat:chosen,sure:true}:classify(it.note,type);
+      S.txs.push({id,type,amount:Math.round((+it.amount)*100)/100,cat:g.cat,note:it.note||"",date:iso(new Date(+it.ts)),src:"quick",ts:+it.ts,created:+it.ts,review:!g.sure&&!!it.note});n++;
+    }
+    save();
+    if(QuickAdd.ackPending)await QuickAdd.ackPending({upTo:maxTs});
+    if(n){render();toast(`${n} anotación${n>1?"es":""} desde la notificación ✓`)}
+  }catch(e){console.error("takePending",e)}
+  finally{taking=false}
 }
 
 /* ============ Enable Banking ============ */
@@ -1277,6 +1293,8 @@ if(isNative){
   setTimeout(()=>bankSync(false),800);
   if(AppP){
     AppP.addListener("appStateChange",st=>{if(st.isActive){autoFixed();takePending();if(S.settings.notif&&QuickAdd)QuickAdd.setNotification({enabled:true}).catch(()=>{});pushNative();bankSync(false);render()}});
+    AppP.addListener("resume",()=>{takePending();pushNative()});
+    document.addEventListener("visibilitychange",()=>{if(!document.hidden)takePending()});
     AppP.addListener("appUrlOpen",d=>{if(d&&d.url&&/[?&](code|error)=/.test(d.url))handleAuthUrl(d.url)});
     AppP.getLaunchUrl&&AppP.getLaunchUrl().then(d=>{if(d&&d.url&&/[?&](code|error)=/.test(d.url))handleAuthUrl(d.url)}).catch(()=>{});
     AppP.addListener("backButton",()=>{const w=document.querySelector(".wiz");if(w)return;if(sheetEl)closeSheet();else if(view!=="home")go("home");else AppP.minimizeApp&&AppP.minimizeApp()});
