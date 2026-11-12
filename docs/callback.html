@@ -10,7 +10,7 @@ small{color:#6b7280}</style></head>
 <small>Si no se abre sola, pulsa el botón.</small></div>
 <script>
 var q=location.search||"";
-var intent="intent://auth"+q+"#Intent;scheme=miscuentas;package=com.mario.miscuentas;end";
+var intent="intent://auth"+q+"#Intent;scheme=miscuentas;package=com.mario.miscuentasplus;end";
 var plain="miscuentas://auth"+q;
 var link=/Android/i.test(navigator.userAgent)?intent:plain;
 document.getElementById("go").href=link;

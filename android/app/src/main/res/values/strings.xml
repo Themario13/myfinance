@@ -1,8 +1,8 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Mis Cuentas</string>
-    <string name="title_activity_main">Mis Cuentas</string>
-    <string name="package_name">com.mario.miscuentas</string>
-    <string name="custom_url_scheme">com.mario.miscuentas</string>
+    <string name="app_name">Mis Cuentas+</string>
+    <string name="title_activity_main">Mis Cuentas+</string>
+    <string name="package_name">com.mario.miscuentasplus</string>
+    <string name="custom_url_scheme">com.mario.miscuentasplus</string>
     <string name="widget_desc">Anota gastos e ingresos sin abrir la app</string>
 </resources>

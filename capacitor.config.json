@@ -1,9 +1,13 @@
 {
-  "appId": "com.mario.miscuentas",
-  "appName": "Mis Cuentas",
+  "appId": "com.mario.miscuentasplus",
+  "appName": "Mis Cuentas+",
   "webDir": "www",
   "plugins": {
-    "CapacitorHttp": { "enabled": true }
+    "CapacitorHttp": {
+      "enabled": true
+    }
   },
-  "android": { "backgroundColor": "#f5f6f8" }
+  "android": {
+    "backgroundColor": "#f5f6f8"
+  }
 }

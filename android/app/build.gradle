@@ -4,7 +4,7 @@ android {
     namespace = "com.mario.miscuentas"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "com.mario.miscuentas"
+        applicationId "com.mario.miscuentasplus"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1
