@@ -1063,6 +1063,21 @@ function openCat(c){
 }
 
 /* ============ Asistente inicial ============ */
+/** Bienvenida para quien empieza de cero: importar extracto o configurar a mano. */
+function openWelcome(){
+  const el=document.createElement("div");el.className="wiz";document.body.appendChild(el);
+  el.innerHTML=`<div class="in-wrap" style="justify-content:center;text-align:center">
+    <div class="emoji" style="font-size:56px">👋</div>
+    <h2>Bienvenido a Mis Cuentas</h2>
+    <p class="lead">Para empezar con todo hecho, lo mejor es importar el extracto de tu banco de los últimos meses. Detecto solos tus gastos fijos y tu nómina, y reparto tus límites según cómo gastas.</p>
+    <button class="btn block" id="wImp" style="margin-top:4px">📥 Importar extracto (recomendado)</button>
+    <div class="note" style="margin:12px 0">Descárgalo de tu banco en CSV (Movimientos → Exportar).</div>
+    <button class="btn sec block" id="wMan">✏️ Prefiero configurarlo a mano</button>
+    <div class="note" style="margin-top:20px;font-size:12px">Tus datos se guardan solo en este móvil.</div>
+  </div>`;
+  el.querySelector("#wImp").onclick=()=>{S.settings.onboarded=true;save();el.remove();pickCSV()};
+  el.querySelector("#wMan").onclick=()=>{el.remove();openWizard()};
+}
 function openWizard(){
   const nom=nomina();
   const P1=!!S.settings.personal; // ¿ya aplicó sus datos reales?
@@ -1145,6 +1160,60 @@ function openWizard(){
 
 /* ============ Importar extracto (CSV de imagin / CaixaBank) ============ */
 function pickCSV(){const i=document.createElement("input");i.type="file";i.accept=".csv,text/csv,text/plain,text/comma-separated-values,*/*";i.onchange=()=>{if(i.files[0])importCSV(i.files[0])};document.body.appendChild(i);i.click();setTimeout(()=>i.remove(),60000)}
+/* ============ Detectar fijos y nómina desde el extracto ============ */
+function median(a){if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y),m=s.length>>1;return s.length%2?s[m]:(s[m-1]+s[m])/2}
+function recurKey(text){const w=norm(text).split(" ").filter(x=>x.length>2&&!STOP.has(x)&&!/\d/.test(x));return w.slice(0,3).join(" ")}
+/** Agrupa los movimientos del extracto y saca lo que se repite cada mes (recibos, cuotas, nómina). */
+function detectRecurring(){
+  const grp={};
+  for(const t of S.txs){if(t.src!=="import"&&t.src!=="bank")continue;const k=recurKey(t.raw||t.note);if(!k)continue;(grp[k]=grp[k]||[]).push(t)}
+  const fixed=[],income=[];
+  for(const [k,list] of Object.entries(grp)){
+    const ms=new Set(list.map(t=>ymOf(t.date)));if(ms.size<2)continue;
+    const inc=list.filter(t=>t.type==="inc"),exp=list.filter(t=>t.type==="exp");
+    const type=inc.length>=exp.length?"inc":"exp";const samp=type==="inc"?inc:exp;if(samp.length<2)continue;
+    const amts=samp.map(t=>t.amount),med=median(amts),mx=Math.max(...amts),mn=Math.min(...amts);
+    const spread=med?(mx-mn)/med:9,perMonth=list.length/ms.size;
+    if(S.fixed.some(f=>(f.match&&(" "+norm(k)+" ").includes(" "+norm(f.match)+" "))))continue;
+    const name=prettify(samp[0].raw||samp[0].note),g=classify(samp[0].raw||samp[0].note,type);
+    const day=Math.max(1,Math.min(31,Math.round(median(samp.map(t=>+t.date.slice(8))))));
+    const cand={key:k,name,cat:g.cat,amount:Math.round(med*100)/100,day,months:ms.size,on:true};
+    if(type==="inc"){if(med>=250&&perMonth<=1.6)income.push(cand)}
+    else if(med>=8&&perMonth<=1.4&&spread<=0.6)fixed.push(cand);
+  }
+  fixed.sort((a,b)=>b.amount-a.amount);income.sort((a,b)=>b.amount-a.amount);
+  return{fixed,income};
+}
+/** Hoja para confirmar lo detectado y crearlo como fijos / nómina. */
+function offerDetected(auto){
+  const {fixed,income}=detectRecurring();
+  const all=[...income.map(x=>({...x,type:"inc"})),...fixed.map(x=>({...x,type:"exp"}))];
+  if(!all.length){if(!auto)toast("No he detectado gastos fijos nuevos");return false}
+  const catOpts=t=>catsOf(t).map(c=>`<option value="${c.id}">${c.icon} ${esc(c.name)}</option>`).join("");
+  openSheet(`<h3>🔎 Esto se repite cada mes</h3>
+   <div class="note" style="margin-bottom:12px">Lo he sacado de tu extracto. Desmarca lo que no sea un fijo y ajusta importe o categoría. Se anotarán solos cada mes.</div>
+   ${income.length?`<div class="note" style="font-weight:700;margin:4px 0">Ingresos fijos</div>`:""}
+   ${all.map((x,i)=>`<div class="card" style="padding:12px 14px;margin:0 0 10px;background:var(--card2)" data-row="${i}">
+     <div class="mini" style="align-items:center"><label style="display:flex;align-items:center;gap:8px;flex:1"><input type="checkbox" data-on="${i}" ${x.on?"checked":""} style="width:20px;height:20px;accent-color:var(--mint)"><b>${esc(x.name)}</b></label><span class="tag ${x.type==="inc"?"auto":""}">${x.months} meses · día ${x.day}</span></div>
+     <div class="grid2" style="margin-top:10px"><input class="in num" data-amt="${i}" inputmode="decimal" value="${amtStr(x.amount)}"><select class="in" data-cat="${i}">${(x.type==="inc"?catsOf("inc"):catsOf("exp")).map(c=>`<option value="${c.id}" ${c.id===x.cat?"selected":""}>${c.icon} ${esc(c.name)}</option>`).join("")}</select></div>
+   </div>`).join("")}
+   <button class="btn block" id="dSave" style="margin-top:6px">Añadir los marcados</button>
+   <button class="btn sec block" id="dSkip" style="margin-top:8px">Ahora no</button>`,el=>{
+    el.querySelectorAll("[data-amt]").forEach(i=>i.oninput=()=>{all[+i.dataset.amt].amount=parseAmt(i.value)});
+    el.querySelectorAll("[data-cat]").forEach(i=>i.onchange=()=>{all[+i.dataset.cat].cat=i.value});
+    el.querySelectorAll("[data-on]").forEach(i=>i.onchange=()=>{all[+i.dataset.on].on=i.checked});
+    el.querySelector("#dSkip").onclick=()=>closeSheet();
+    el.querySelector("#dSave").onclick=()=>{
+      let n=0;
+      for(const x of all){if(!x.on||!(+x.amount))continue;
+        if(x.type==="inc"&&x.cat==="nomina"){const nm=nomina();if(nm){Object.assign(nm,{amount:+x.amount,day:x.day,match:x.key});n++;continue}}
+        S.fixed.push({id:uid(),name:x.name,type:x.type,cat:x.cat,amount:+x.amount,day:x.day,freq:"m",month:1,auto:true,match:x.key,since:todayISO()});n++;
+      }
+      syncGoals();relinkFixed();applyAutoLimits();save();closeSheet();render();toast(`${n} ${n===1?"añadido":"añadidos"} ✓`);
+    };
+  });
+  return true;
+}
 function parseImagin(text){
   const lines=text.replace(/\r/g,"").split("\n").map(l=>l.trim()).filter(Boolean);
   const num=v=>parseAmt(String(v).replace(/EUR/i,""));
@@ -1185,7 +1254,8 @@ async function importCSV(file){
     S.settings.csvDate=last;
     relinkFixed();applyAutoLimits();save();render();
     toast(`${added} movimientos importados${linked?` · ${linked} ya los tenías`:""}${balance!=null?` · saldo ${money(balance)}`:""}`);
-  }catch(e){toast("No se pudo leer el archivo: "+e.message)}
+    setTimeout(()=>offerDetected(true),500);
+  }catch(e){logErr("importar",e);toast("No se pudo leer el archivo: "+e.message)}
 }
 
 /* ============ Android (Capacitor) ============ */
@@ -1368,7 +1438,7 @@ safe("cargar",load);if(!S)S=freshState();
 if(!S.bank.redirect)S.bank.redirect=REDIRECT_DEFAULT;
 safe("fijos automáticos",autoFixed);
 render();
-if(!S.settings.onboarded)setTimeout(openWizard,250);
+if(!S.settings.onboarded)setTimeout(()=>{if(!S.txs.length&&!S.fixed.length)openWelcome();else openWizard()},250);
 if(isNative){
   takePending();safe("resumen",pushNative);
   if(QuickAdd){
