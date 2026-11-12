@@ -10,6 +10,8 @@
     "@capacitor/cli": "^8.6.0",
     "@capacitor/core": "^8.6.0",
     "@capacitor/filesystem": "^8.1.5",
-    "@capacitor/share": "^8.0.3"
+    "@capacitor/share": "^8.0.3",
+    "tesseract.js": "^5.1.1",
+    "tesseract.js-core": "^5.1.1"
   }
 }

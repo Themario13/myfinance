@@ -825,6 +825,7 @@ function renderAjustes(){
   <div class="card"><h2>Tickets</h2>
     <div class="note" style="margin-bottom:10px">Guarda la foto del ticket al anotar un gasto. Aquí los exportas todos a un archivo que abres en el ordenador (por correo, Drive, WhatsApp o cable).</div>
     <div class="mini" style="margin-bottom:10px"><span>Gastos con foto</span><b class="num" id="tkCount">…</b></div>
+    <div class="set-row"><div class="mid"><b>Leer el ticket <span class="tag">en pruebas</span></b><div class="s">Al hacer la foto, intenta rellenar el importe y la fecha para que los confirmes.</div></div><button class="sw ${S.settings.ocr!==false?"on":""}" id="swOcr"></button></div>
     <button class="btn sec block" id="tkExport">📤 Exportar tickets</button>
   </div>
   <div class="card"><h2>Copia de seguridad</h2>
@@ -836,6 +837,7 @@ function renderAjustes(){
   ${(()=>{let l=[];try{l=JSON.parse(localStorage.getItem("miscuentas.errs")||"[]")}catch(_){}return l.length?`<div class="card"><h2>Diagnóstico <a id="errClr">Borrar</a></h2><div class="note">Si algo falla, copia esto y pásamelo:</div><div style="font-family:ui-monospace,monospace;font-size:11px;color:var(--muted);margin-top:8px;max-height:160px;overflow:auto">${l.map(esc).join("<br>")}</div><button class="btn sec block" id="errCopy" style="margin-top:10px">Copiar errores</button></div>`:""})()}
   <div class="note" style="text-align:center;margin:10px 0 20px">Mis Cuentas · hecha para ti</div>`;
   photoCount().then(n=>{const e=$("#tkCount");if(e)e.textContent=n});
+  {const o=$("#swOcr");if(o)o.onclick=()=>{S.settings.ocr=S.settings.ocr===false;save();o.classList.toggle("on",S.settings.ocr!==false)}}
   $("#tkExport").onclick=exportTickets;
   {const ec=$("#errCopy");if(ec)ec.onclick=async()=>{try{await navigator.clipboard.writeText(localStorage.getItem("miscuentas.errs")||"");toast("Copiado")}catch(e){toast("No se pudo copiar")}};const ex=$("#errClr");if(ex)ex.onclick=()=>{localStorage.removeItem("miscuentas.errs");renderAjustes()}}
   document.querySelectorAll("[data-go]").forEach(r=>r.onclick=()=>({nomina:()=>openFixed(nomina()||{type:"inc",cat:"nomina",name:"Nómina",day:28,auto:true,match:"nomina"}),balance:openBalance,goal:()=>go("goals"),fijos:()=>go("fijos"),limits:openLimits})[r.dataset.go]());
@@ -912,6 +914,54 @@ async function exportTickets(){
   }catch(e){logErr("exportar tickets",e);toast("No se pudo exportar: "+(e.message||e))}
   finally{if(btn){btn.disabled=false;btn.textContent="📤 Exportar tickets"}}
 }
+/* ============ Leer el ticket (OCR, incluido en la app) ============ */
+let _ocr=null,_ocrP=null;
+function loadScript(src){return new Promise((res,rej)=>{const s=document.createElement("script");s.src=src;s.onload=()=>res();s.onerror=()=>rej(new Error("no se pudo cargar "+src));document.head.appendChild(s)})}
+async function getOCR(){
+  if(_ocr)return _ocr;if(_ocrP)return _ocrP;
+  _ocrP=(async()=>{
+    if(!window.Tesseract)await loadScript("tesseract/tesseract.min.js");
+    _ocr=await Tesseract.createWorker("eng",1,{workerPath:"tesseract/worker.min.js",corePath:"tesseract/core/tesseract-core-simd-lstm.wasm.js",langPath:"tesseract/lang/",workerBlobURL:false,gzip:true,cacheMethod:"none"});
+    return _ocr;
+  })();
+  return _ocrP;
+}
+function normAmt2(x){x=String(x).replace(/[^\d.,]/g,"");if(/[.,]\d{2}$/.test(x)){const dec=x.slice(-2);x=x.slice(0,-3).replace(/[.,]/g,"")+"."+dec}else x=x.replace(/[.,]/g,"");const v=parseFloat(x);return isFinite(v)?v:0}
+/** De un ticket leído, saca el total (prioriza la línea con «TOTAL») y la fecha. */
+function parseReceipt(text){
+  const lines=String(text||"").split(/\n/).map(l=>l.trim()).filter(Boolean);
+  let best=null;const all=[];
+  for(const l of lines){
+    const up=l.toUpperCase();const m=l.match(/\d{1,3}(?:[.,]\d{3})*[.,]\d{2}(?!\d)/g);if(!m)continue;
+    const vals=m.map(normAmt2).filter(v=>v>0&&v<100000);all.push(...vals);
+    if(/\bTOTAL\b/.test(up)&&!/SUBTOTAL|BASE|IVA|I\.V\.A|CAMBIO|ENTREGAD|DEVOL|EFECTIVO/.test(up)){const v=Math.max(...vals);if(v&&(best==null||v>best))best=v}
+  }
+  let amount=best!=null?best:(all.length?Math.max(...all):null);
+  let date=null;const dm=text.match(/(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+  if(dm){let d=dm[1].padStart(2,"0"),mo=dm[2].padStart(2,"0"),y=dm[3];y=y.length===2?"20"+y:y;
+    if(+mo>=1&&+mo<=12&&+d>=1&&+d<=31){const iso=`${y}-${mo}-${d}`;if(iso>="2015-01-01"&&iso<=todayISO())date=iso}}
+  return{amount:amount!=null?Math.round(amount*100)/100:null,date};
+}
+async function ocrReceipt(dataUrl){
+  const w=await Promise.race([getOCR(),new Promise((_,rej)=>setTimeout(()=>rej(new Error("tardó demasiado")),30000))]);
+  const r=await Promise.race([w.recognize(dataUrl),new Promise((_,rej)=>setTimeout(()=>rej(new Error("tardó demasiado")),30000))]);
+  return parseReceipt(r&&r.data&&r.data.text);
+}
+/** Lee el ticket en segundo plano y ofrece rellenar importe y fecha. */
+async function ocrSuggest(el,dataUrl){
+  if(S.settings.ocr===false)return;const box=el.querySelector("#tOcr");if(!box)return;
+  box.innerHTML='<span class="spin"></span> Leyendo el ticket…';
+  try{
+    const r=await ocrReceipt(dataUrl);
+    const amtEl=el.querySelector("#tAmt"),dateEl=el.querySelector("#tDate");if(!amtEl)return;
+    if(!r.amount&&!r.date){box.innerHTML="No he podido leer el ticket. Pon el importe a mano.";return}
+    const parts=[];if(r.amount)parts.push(`<b>${esc(money(r.amount))}</b>`);if(r.date)parts.push(esc(new Date(r.date).toLocaleDateString("es-ES")));
+    const apply=()=>{if(r.amount){amtEl.value=amtStr(r.amount);amtEl.dispatchEvent(new Event("input"))}if(r.date&&dateEl)dateEl.value=r.date;box.innerHTML="✓ Puesto del ticket. Revísalo por si acaso."};
+    box.innerHTML=`🧾 Leído: ${parts.join(" · ")} <button class="btn sm" id="tOcrApply" style="margin-left:6px">Usar</button>`;
+    box.querySelector("#tOcrApply").onclick=apply;
+    if(r.amount&&!parseAmt(amtEl.value))apply();
+  }catch(e){box.innerHTML="";logErr("ocr",e)}
+}
 /* ============ Fotos de tickets (se guardan en el móvil, aparte) ============ */
 const PHOTODB="miscuentas-fotos";
 function idb(){return new Promise((res,rej)=>{const r=indexedDB.open(PHOTODB,1);r.onupgradeneeded=()=>{if(!r.result.objectStoreNames.contains("fotos"))r.result.createObjectStore("fotos")};r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
@@ -943,7 +993,7 @@ function openTx(t){
      <div class="chips" style="flex-wrap:wrap"><button class="chip ${t.goal?"":"on"}" data-g="">No</button>${(S.goals||[]).filter(g=>!g.archived||g.id===t.goal).map(g=>`<button class="chip ${t.goal===g.id?"on":""}" data-g="${g.id}">${esc(g.icon||"🎯")} ${esc(g.name)}</button>`).join("")}</div></div>
    <div class="field" id="tRefRow" style="display:none"><span>¿Te están devolviendo parte de un gasto?</span><div id="tRefBox"></div></div>
    <label class="field"><span>Fecha</span><input class="in" type="date" id="tDate" value="${t.date||todayISO()}" ${fromBank?"readonly":""}></label>
-   <div class="field"><span>📷 Foto del ticket (opcional)</span><div id="tPhotoBox"></div><input type="file" id="tPhotoIn" accept="image/*" hidden></div>
+   <div class="field"><span>📷 Foto del ticket (opcional)</span><div id="tPhotoBox"></div><div id="tOcr" class="note" style="margin-top:6px"></div><input type="file" id="tPhotoIn" accept="image/*" hidden></div>
    <button class="btn block" id="tSave">${isNew?"Guardar":"Guardar cambios"}</button>
    ${!isNew?`<button class="btn danger block" id="tDel" style="margin-top:8px">Eliminar</button>`:""}`,el=>{
     el.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{type=b.dataset.t;if(sel&&cat(sel).type!==type)sel=null;draw(el)});
@@ -966,7 +1016,7 @@ function openTx(t){
         box.querySelector("#tPhotoImg").onclick=()=>viewPhoto(src);box.querySelector("#tPhotoX").onclick=()=>{photoData=null;photoId=null;photoChanged=true;drawPhoto()}}
       else box.innerHTML=`<button class="btn sec block" id="tPhotoAdd">📷 Añadir foto del ticket</button>`;
       const a=box.querySelector("#tPhotoAdd");if(a)a.onclick=()=>pin.click()};
-    pin.onchange=async()=>{const f=pin.files&&pin.files[0];if(!f)return;try{photoData=await compressImg(f);photoChanged=true;drawPhoto()}catch(e){toast("No se pudo cargar la imagen")}pin.value=""};
+    pin.onchange=async()=>{const f=pin.files&&pin.files[0];if(!f)return;try{photoData=await compressImg(f);photoChanged=true;await drawPhoto();if(type==="exp")ocrSuggest(el,photoData)}catch(e){toast("No se pudo cargar la imagen")}pin.value=""};
     drawPhoto();
     let goalId=t.goal||"";el.querySelectorAll("[data-g]").forEach(b=>b.onclick=()=>{goalId=b.dataset.g;el.querySelectorAll("[data-g]").forEach(x=>x.classList.toggle("on",x===b))});
     draw(el);
