@@ -1,9 +1,8 @@
-name: Página de retorno del banco
+name: Web app para iPhone (GitHub Pages)
 
 on:
   push:
     branches: [main]
-    paths: [docs/**]
   workflow_dispatch:
 
 permissions:
@@ -11,15 +10,26 @@ permissions:
   pages: write
   id-token: write
 
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
     environment:
       name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      - name: Preparar el sitio (app + callback del banco)
+        run: |
+          mkdir -p _site
+          cp -r www/* _site/
+          cp docs/callback.html _site/callback.html 2>/dev/null || true
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: docs
-      - uses: actions/deploy-pages@v4
+          path: _site
+      - id: deploy
+        uses: actions/deploy-pages@v4
