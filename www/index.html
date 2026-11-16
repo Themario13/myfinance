@@ -1227,22 +1227,30 @@ function recurKey(text){const w=norm(text).split(" ").filter(x=>x.length>2&&!STO
 function detectRecurring(){
   const grp={};
   for(const t of S.txs){if(t.src!=="import"&&t.src!=="bank")continue;const k=recurKey(t.raw||t.note);if(!k)continue;(grp[k]=grp[k]||[]).push(t)}
-  const fixed=[],income=[];
+  const curM=curYM(),fixed=[],income=[];
   for(const [k,list] of Object.entries(grp)){
-    const ms=new Set(list.map(t=>ymOf(t.date)));if(ms.size<2)continue;
     const inc=list.filter(t=>t.type==="inc"),exp=list.filter(t=>t.type==="exp");
-    const type=inc.length>=exp.length?"inc":"exp";const samp=type==="inc"?inc:exp;if(samp.length<2)continue;
-    const amts=samp.map(t=>t.amount),med=median(amts),mx=Math.max(...amts),mn=Math.min(...amts);
-    const spread=med?(mx-mn)/med:9,perMonth=list.length/ms.size;
-    if(S.fixed.some(f=>(f.match&&(" "+norm(k)+" ").includes(" "+norm(f.match)+" "))))continue;
+    const type=inc.length>=exp.length?"inc":"exp";const samp=type==="inc"?inc:exp;
+    if(samp.length<3)continue;
+    const monthsWith=new Set(samp.map(t=>ymOf(t.date)));
+    const perMonth=samp.length/monthsWith.size;
+    if(perMonth>1.6)continue;                                   // los fijos pasan ~1 vez al mes (fuera súper, gasolina, bares…)
+    const first=[...monthsWith].sort()[0];
+    let span=0;for(let m=first;m<curM;m=addMonths(m,1))span++;span=Math.max(span,1);
+    const complete=[...monthsWith].filter(m=>m<curM).length||monthsWith.size;
+    if(complete<3||complete<span*0.5)continue;                  // tiene que repetirse en la mayoría de los meses
+    const amts=samp.map(t=>t.amount);const med=median(amts);
+    const near=amts.filter(v=>Math.abs(v-med)<=med*0.2);        // importe estable (ignora algún recibo raro)
+    if(near.length<Math.max(3,complete*0.6))continue;
+    if(S.fixed.some(f=>f.match&&(" "+norm(k)+" ").includes(" "+norm(f.match)+" ")))continue;
     const name=prettify(samp[0].raw||samp[0].note),g=classify(samp[0].raw||samp[0].note,type);
     const day=Math.max(1,Math.min(31,Math.round(median(samp.map(t=>+t.date.slice(8))))));
-    const cand={key:k,name,cat:g.cat,amount:Math.round(med*100)/100,day,months:ms.size,on:true};
-    if(type==="inc"){if(med>=250&&perMonth<=1.6)income.push(cand)}
-    else if(med>=8&&perMonth<=1.4&&spread<=0.6)fixed.push(cand);
+    const cand={key:k,name,cat:g.cat,amount:Math.round(median(near)*100)/100,day,months:complete,on:true};
+    if(type==="inc"){if(cand.amount>=200)income.push(cand)}
+    else if(cand.amount>=5)fixed.push(cand);
   }
   fixed.sort((a,b)=>b.amount-a.amount);income.sort((a,b)=>b.amount-a.amount);
-  return{fixed,income};
+  return{fixed:fixed.slice(0,14),income};
 }
 /** Hoja para confirmar lo detectado y crearlo como fijos / nómina. */
 function offerDetected(auto){
