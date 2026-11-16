@@ -249,7 +249,7 @@ const DEFAULT_CATS=[
  {id:"otrosi",name:"Otros ingresos",icon:"💰",color:"#a3e635",type:"inc",budget:0},
 ];
 // medias reales de tu extracto (sep-nov 2026), redondeadas
-const LIMIT_SUGGEST={super:250,ocio:120,transporte:100,casa:60,ropa:50,ocio_x:0,salud:40,cuidado:30,coche:60,subs:25,tools:20,regalos:20,otros:60};
+const LIMIT_SUGGEST={super:250,ocio:120,transporte:100,casa:60,ropa:50,salud:40,cuidado:30,coche:60,subs:25,tools:20,regalos:20,otros:60};
 const AVG_VARIABLE_DEFAULT=750; // lo que te cuesta el día a día de media según el extracto
 const avgVariable=()=>{const st=catStats();return st.months?Math.round(Object.values(st.avg).reduce((a,b)=>a+b,0)):AVG_VARIABLE_DEFAULT};
 const DEFAULT_RULES={
@@ -475,8 +475,12 @@ function relinkFixed(){
 /** Hucha del objetivo: lo ahorrado desde que empezó, lo usado en él y lo previsto este mes. */
 function applyAutoLimits(){
   if(S.settings.autoLimits===false||!S.settings.personal)return;
-  const {lims}=suggestLimits(budgetBase(),S.settings.lockedLims||{});
-  for(const c of catsOf("exp")){if(c.saving)continue;c.budget=lims[c.id]||0}
+  const budget=budgetBase();if(budget<=0)return;
+  const exps=catsOf("exp").filter(c=>!c.saving);
+  const sum=exps.reduce((a,c)=>a+(+c.budget||0),0);
+  if(sum<=0){const {lims}=suggestLimits(budget,{});for(const c of exps)c.budget=lims[c.id]||0;return}
+  if(sum>budget){const f=budget/sum;for(const c of exps)c.budget=Math.max(0,Math.round((+c.budget||0)*f/5)*5)}
+  // si tus límites caben en el presupuesto, se quedan tal cual los pusiste
 }
 /** Consejos personalizados, ordenados por lo que te ahorrarían. */
 function tips(){
@@ -512,18 +516,27 @@ function openTips(){const T=tips();openSheet(`<h3>💡 Cómo ahorrar más</h3>${
 
 /** Editor de límites: reparte solo y reajusta el resto cuando tocas uno. */
 function limitsEditor(el,budget,state,onChange,stats){
-  const st=stats||catStats();state.locks=state.locks||{};
+  const st=stats||catStats();
+  const cats=catsOf("exp").filter(c=>!c.saving);
+  if(!state.lims){
+    state.lims=Object.fromEntries(cats.filter(c=>+c.budget).map(c=>[c.id,+c.budget]));
+    if(!Object.keys(state.lims).length){const r=suggestLimits(budget,{},st.avg);state.lims={...r.lims}}
+  }
+  const upd=()=>{const tot=cats.reduce((a,c)=>a+(+state.lims[c.id]||0),0),spare=budget-tot;
+    const tE=el.querySelector("#lTot"),sE=el.querySelector("#lSpare"),lE=el.querySelector("#lSpareLbl");
+    if(tE)tE.textContent=money0(tot);
+    if(sE){sE.textContent=money0(Math.abs(spare));sE.className="num "+(spare<0?"exp":"inc")}
+    if(lE)lE.textContent=spare>=0?"Sin repartir":"Te pasas";
+    onChange&&onChange()};
   const draw=()=>{
-    const {lims,spare}=suggestLimits(budget,state.locks,st.avg);state.lims=lims;
-    const keys=Object.keys(lims).sort((a,b)=>(st.avg[b]||0)-(st.avg[a]||0));
-    const tot=keys.reduce((a,k)=>a+(lims[k]||0),0);
-    el.innerHTML=`<div class="calc" style="margin:0 0 12px"><div class="mini"><span>Para el día a día</span><b class="num">${money0(budget)}</b></div><div class="mini"><span>Repartido</span><b class="num">${money0(tot)}</b></div>
-      <div class="mini tot"><span><b>${spare>=0?"Sin repartir":"Te pasas"}</b></span><b class="num ${spare<0?"exp":"inc"}">${money0(Math.abs(spare))}</b></div></div>
-      ${budget<=0?`<div class="alert e"><span class="e1">⚠️</span><div>Con este ahorro no te queda nada para el día a día. Baja el objetivo de ahorro.</div></div>`:""}
-      <div class="card" style="padding:6px 16px;margin:0">${keys.map(k=>{const a=st.avg[k]||0,v=lims[k]||0,lk=k in state.locks;return `<div class="fxrow"><div class="nm">${cat(k).icon} ${esc(cat(k).name)}<small>${a?`ahora ${money0(a)}`:""}${a&&v<a-2?` · <span class="exp">−${money0(a-v)}</span>`:""}${lk?' · <span class="inc">fijado por ti</span>':""}</small></div><input class="in bud num" data-l="${k}" inputmode="decimal" value="${amtStr(v)}"></div>`}).join("")}</div>
-      <div class="note" style="margin-top:10px">Recorto poco en lo básico (súper, gasolina, salud) y más en lo prescindible. Si cambias una cifra, la dejo fija y reajusto el resto.${Object.keys(state.locks).length?` <span class="link" data-reset>Volver a repartir todo</span>`:""}</div>`;
-    el.querySelectorAll("[data-l]").forEach(i=>i.onchange=()=>{state.locks[i.dataset.l]=parseAmt(i.value);draw();onChange&&onChange()});
-    const r=el.querySelector("[data-reset]");if(r)r.onclick=()=>{state.locks={};draw();onChange&&onChange()};
+    const tot=cats.reduce((a,c)=>a+(+state.lims[c.id]||0),0),spare=budget-tot;
+    el.innerHTML=`<div class="calc" style="margin:0 0 12px"><div class="mini"><span>Para el día a día</span><b class="num">${money0(budget)}</b></div><div class="mini"><span>Repartido</span><b class="num" id="lTot">${money0(tot)}</b></div>
+      <div class="mini tot"><span><b id="lSpareLbl">${spare>=0?"Sin repartir":"Te pasas"}</b></span><b class="num ${spare<0?"exp":"inc"}" id="lSpare">${money0(Math.abs(spare))}</b></div></div>
+      ${budget<=0?`<div class="alert e"><span class="e1">⚠️</span><div>Con este ahorro no te queda nada para el día a día. Baja el objetivo de ahorro.</div></div>`:`<button class="btn sec block" id="lFill" style="margin-bottom:10px">✨ Repartir por mis hábitos</button>`}
+      <div class="card" style="padding:6px 16px;margin:0">${cats.map(c=>{const av=st.avg[c.id]||0;return `<div class="fxrow"><div class="nm">${c.icon} ${esc(c.name)}<small>${av?`sueles gastar ${money0(av)}/mes`:"sin datos"}</small></div><input class="in bud num" data-l="${c.id}" inputmode="decimal" value="${amtStr(state.lims[c.id]||0)}" placeholder="0 €"></div>`}).join("")}</div>
+      <div class="note" style="margin-top:10px">Pon lo máximo que quieras gastar al mes en cada cosa. Deja 0 lo que no quieras limitar. Lo que sumen puede ser menos que «para el día a día» (así te sobra) o más (entonces te pasarías del ahorro).</div>`;
+    el.querySelectorAll("[data-l]").forEach(i=>i.oninput=()=>{state.lims[i.dataset.l]=parseAmt(i.value);upd()});
+    const f=el.querySelector("#lFill");if(f)f.onclick=()=>{const r=suggestLimits(budget,{},st.avg);state.lims={...r.lims};draw()};
   };
   draw();
 }
@@ -1086,14 +1099,14 @@ function openBalance(){
   });
 }
 function openLimits(){
-  const state={locks:{...(S.settings.lockedLims||{})}};
+  const state={};
   openSheet(`<h3>Límites por categoría</h3>
-   <div class="set-row" style="border:0;padding-top:0"><div class="mid"><b>Ajustar solos</b><div class="s">Se recalculan si cambias el ahorro, la nómina o los fijos</div></div><button class="sw ${S.settings.autoLimits!==false?"on":""}" id="lAuto"></button></div>
+   <div class="set-row" style="border:0;padding-top:0"><div class="mid"><b>Ajustar solos con el ahorro</b><div class="s">Si cambias tu objetivo de ahorro, tu nómina o tus fijos, los límites se reajustan solos manteniendo tus proporciones</div></div><button class="sw ${S.settings.autoLimits!==false?"on":""}" id="lAuto"></button></div>
    <div id="lEd"></div>
    <button class="btn block" id="lSave" style="margin-top:12px">Guardar límites</button>`,el=>{
     let auto=S.settings.autoLimits!==false;const sw=el.querySelector("#lAuto");sw.onclick=()=>{auto=!auto;sw.classList.toggle("on",auto)};
     limitsEditor(el.querySelector("#lEd"),budgetBase(),state);
-    el.querySelector("#lSave").onclick=()=>{for(const c of catsOf("exp")){if(!c.saving)c.budget=state.lims[c.id]||0}S.settings.lockedLims=state.locks;S.settings.autoLimits=auto;save();closeSheet();render();toast("Límites guardados")};
+    el.querySelector("#lSave").onclick=()=>{for(const c of catsOf("exp")){if(!c.saving)c.budget=state.lims[c.id]||0}S.settings.autoLimits=auto;delete S.settings.lockedLims;save();closeSheet();render();toast("Límites guardados")};
   });
 }
 const COLORS=["#818cf8","#a78bfa","#f472b6","#f87171","#fbbf24","#d6a76c","#3ee6a8","#4ade80","#22d3ee","#60a5fa","#94a3b8","#7c8594"];
@@ -1181,7 +1194,7 @@ function openWizard(){
     el.querySelectorAll("[data-fon]").forEach(b=>b.onclick=()=>{const all=[...W.fixed,...W.extra];const x=all[+b.dataset.fon];x.on=!x.on;b.classList.toggle("on",x.on);el.querySelector("#wFixT").textContent=money(fixedTot())});
     el.querySelectorAll("[data-famt]").forEach(i=>i.oninput=()=>{const all=[...W.fixed,...W.extra];const x=all[+i.dataset.famt];x.amount=parseAmt(i.value);if(x.amount>0&&!x.on){x.on=true;el.querySelector(`[data-fon="${i.dataset.famt}"]`).classList.add("on")}el.querySelector("#wFixT").textContent=money(fixedTot())});
     const wl=el.querySelector("#wLims");if(wl&&!W._linked){W._linked=1;const bak=S.fixed;S.fixed=[...W.fixed,...W.extra].filter(f=>f.on).map((f,i)=>({...f,id:"tmp"+i,type:"exp"}));const snap=JSON.stringify(S.txs);relinkFixed();W._stats=catStats();S.txs=JSON.parse(snap);S.fixed=bak}
-    if(wl){W.limState=W.limState||{locks:{...(S.settings.lockedLims||{})}};limitsEditor(wl,(+W.nomAmt||0)-fixedTot()-yearTot()/12-W.goal,W.limState,null,W._stats)}
+    if(wl){W.limState=W.limState||{};limitsEditor(wl,(+W.nomAmt||0)-fixedTot()-yearTot()/12-W.goal,W.limState,null,W._stats)}
     const g=el.querySelector("#wGoal");if(g)g.oninput=()=>{W.goal=parseAmt(g.value);const free=(+W.nomAmt||0)-fixedTot()-W.goal;el.querySelector("#wGoalV").textContent="−"+money0(W.goal);el.querySelector("#wFree").textContent=money0(free);el.querySelector("#wPerDay").textContent=`≈ ${money0(free/30)} al día`};
     const wn=el.querySelector("#wNotif");if(wn)wn.onclick=()=>wn.classList.toggle("on");
     const sk=el.querySelector("#wSkip");if(sk)sk.onclick=()=>{el.remove();S.settings.onboarded=true;save();render()};
@@ -1205,7 +1218,7 @@ function openWizard(){
      for(const f of S.fixed){if(!(+f.amount)||!fixedDue(f,ym)||fixedPaid(f,ym))continue;const day=Math.min(+f.day||1,daysIn(ym));
        if(day<=d)S.txs.push({id:uid(),type:f.type||"exp",amount:+f.amount,cat:f.cat,note:f.name,date:`${ym}-${pad(day)}`,fixedId:f.id,src:"auto",ts:Date.now(),created:0,ext:!!f.ext||undefined})}}
     {const g0=activeGoals()[0];if(g0)g0.monthly=+W.goal||0;else if(+W.goal>0)(S.goals=S.goals||[]).push({id:"g"+uid(),name:W.goalName,icon:"🏠",monthly:+W.goal,target:0,initial:0,start:curYM()+"-01"});syncGoals()}
-    if(W.limState){for(const c of catsOf("exp")){if(!c.saving)c.budget=W.limState.lims[c.id]||0}S.settings.lockedLims=W.limState.locks;S.settings.autoLimits=true}
+    if(W.limState){for(const c of catsOf("exp")){if(!c.saving)c.budget=W.limState.lims[c.id]||0}S.settings.autoLimits=true}
     S.settings.onboarded=true;S.settings.personal=1;relinkFixed();if(activeGoals().length>1)applyAutoLimits();
     const wn=el.querySelector("#wNotif");
     if(wn){S.settings.notif=wn.classList.contains("on");S.settings.notifAsked=true;QuickAdd&&QuickAdd.setNotification({enabled:S.settings.notif}).catch(()=>{})}
