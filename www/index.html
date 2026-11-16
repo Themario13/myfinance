@@ -994,10 +994,10 @@ function openTx(t){
    ${fromBank?"":`<div class="seg"><button data-t="exp">Gasto</button><button data-t="inc">Ingreso</button></div>`}
    <input class="amount-in num" id="tAmt" inputmode="decimal" placeholder="0,00 €" value="${amtStr(t.amount)}" ${fromBank?"readonly":""}>
    <input class="in" id="tNote" placeholder="Concepto (ej: Mercadona)" value="${esc(t.note||"")}" style="margin-top:6px">
+   <div class="field" id="tRefRow" style="display:none;margin-top:12px"><span>↩ ¿Es la devolución de un gasto? <span style="font-weight:500">(ej: te hacen Bizum de algo que pagaste tú)</span></span><div id="tRefBox"></div></div>
    <div class="cats" id="tCats"></div>
    <div class="field" id="tGoalRow" ${activeGoals().length||t.goal?"":'style="display:none"'}><span>¿Es para un objetivo? <span style="font-weight:500">(sale de su hucha, no cuenta como gasto del mes)</span></span>
      <div class="chips" style="flex-wrap:wrap"><button class="chip ${t.goal?"":"on"}" data-g="">No</button>${(S.goals||[]).filter(g=>!g.archived||g.id===t.goal).map(g=>`<button class="chip ${t.goal===g.id?"on":""}" data-g="${g.id}">${esc(g.icon||"🎯")} ${esc(g.name)}</button>`).join("")}</div></div>
-   <div class="field" id="tRefRow" style="display:none"><span>¿Te están devolviendo parte de un gasto?</span><div id="tRefBox"></div></div>
    <label class="field"><span>Fecha</span><input class="in" type="date" id="tDate" value="${t.date||todayISO()}" ${fromBank?"readonly":""}></label>
    <div class="field"><span>📷 Foto del ticket (opcional)</span><div id="tPhotoBox"></div><div id="tOcr" class="note" style="margin-top:6px"></div><input type="file" id="tPhotoIn" accept="image/*" hidden></div>
    <button class="btn block" id="tSave">${isNew?"Guardar":"Guardar cambios"}</button>
