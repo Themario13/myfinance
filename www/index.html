@@ -574,17 +574,11 @@ function totalMoney(){
 }
 /** Anota solos los fijos cuyo día ya ha llegado (si no hay banco conectado). */
 function autoFixed(){
-  const ym=curYM(),d=new Date().getDate();let n=0;
-  for(const f of S.fixed){
-    if(!f.auto||!(+f.amount)||!fixedDue(f,ym)||fixedPaid(f,ym))continue;
-    if(S.bank.sessionId&&!f.ext)continue;                                            // con banco conectado, llega el cargo real
-    const day=Math.min(+f.day||1,daysIn(ym));if(day>d)continue;
-    if(!f.ext&&S.settings.csvDate&&`${ym}-${pad(day)}`<=S.settings.csvDate)continue;  // ya cubierto por el extracto importado
-    if(f.since&&`${ym}-${pad(day)}`<f.since)continue;
-    const left=Math.round(((+f.amount)-fixedSum(f,ym))*100)/100;if(left<=0)continue;
-    S.txs.push({id:uid(),type:f.type||"exp",amount:left,cat:f.cat,note:f.name,date:`${ym}-${pad(day)}`,fixedId:f.id,src:"auto",ts:Date.now(),created:Date.now(),ext:!!f.ext||undefined});n++;
-  }
-  if(n)save();return n;
+  // Los fijos ya NO se anotan solos: los marcas tú (botón Pagar) o llegan con el cargo real del banco/CSV.
+  // Aquí solo limpiamos los «auto» antiguos para que no se dupliquen.
+  const before=S.txs.length;S.txs=S.txs.filter(t=>t.src!=="auto");
+  if(S.txs.length!==before)save();
+  return 0;
 }
 
 /* ============ Navegación ============ */
@@ -819,9 +813,17 @@ function renderFijos(){
   const totE=due.filter(f=>(f.type||"exp")==="exp").reduce((a,f)=>a+(+f.amount||0),0);
   const totI=due.filter(f=>f.type==="inc").reduce((a,f)=>a+(+f.amount||0),0);
   const tpls=FIXED_TEMPLATES.filter(t=>!S.fixed.some(f=>f.name===t.name));
-  const row=f=>{const p=fixedPaid(f,month),c=cat(f.cat),inc=f.type==="inc";
-    return `<div class="row"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid tap" data-fx="${f.id}" style="cursor:pointer"><div class="t">${esc(f.name)}</div><div class="s">${(f.freq||"m")==="m"?"Cada mes":"Cada año ("+monthName("2000-"+pad(f.month||1),true).replace(".","")+")"} · día ${f.day}${f.ext?" · otra cuenta":""}${cat(f.cat).saving?" · va a tu ahorro":""}</div></div>
-    <div class="amt num ${inc?"inc":""}">${f.amount?esc(money(f.amount)):"—"}</div></div>`};
+  const row=f=>{const c=cat(f.cat),inc=f.type==="inc",amt=+f.amount||0,done=Math.round(fixedSum(f,month)*100)/100;
+    const paid=amt>0&&done>=amt*0.999,pct=amt?Math.min(100,Math.round(done/amt*100)):0;
+    const col=paid?"var(--mint)":inc?"var(--mint)":c.color;
+    return `<div style="padding:4px 0 10px;border-bottom:1px solid var(--line)">
+      <div class="row" style="padding:6px 0"><div class="ic" style="background:${c.color}22">${c.icon}</div>
+      <div class="mid tap" data-fx="${f.id}" style="cursor:pointer"><div class="t">${esc(f.name)}${paid?' <span class="tag auto">pagado ✓</span>':""}</div><div class="s">${(f.freq||"m")==="m"?"Cada mes":"Cada año ("+monthName("2000-"+pad(f.month||1),true).replace(".","")+")"} · día ${f.day}${f.ext?" · otra cuenta":""}${c.saving?" · va a tu ahorro":""}</div></div>
+      <div class="amt num ${inc?"inc":""}">${amt?esc(money(amt)):"—"}</div></div>
+      ${amt&&!inc?`<div class="bar thin"><i style="width:${pct}%;background:${col}"></i></div>
+      <div class="row" style="padding:6px 0 0;align-items:center"><div class="s" style="flex:1">${done>0?`Pagado ${esc(money(done))} de ${esc(money(amt))}`:"Sin pagar este mes"}</div>
+        ${paid?`<button class="btn sm sec" data-unpay="${f.id}">Deshacer</button>`:`<button class="btn sm sec" data-paypart="${f.id}" style="margin-right:6px">Parte…</button><button class="btn sm" data-pay="${f.id}">Pagar${done>0?" resto":""}</button>`}</div>`:""}
+    </div>`};
   $("#main").innerHTML=`
   <div class="card"><h2>Lo que pagas cada mes</h2>
     <div class="mini"><span>Entra (nómina)</span><b class="num inc">${esc(money(totI))}</b></div>
@@ -831,11 +833,17 @@ function renderFijos(){
   ${other.length?`<div class="card"><h2>Una vez al año</h2>${other.map(row).join("")}</div>`:""}
   <button class="btn block" id="addFx">+ Añadir fijo</button>
   ${tpls.length?`<div class="card" style="margin-top:12px"><h2>Sugerencias para tu piso</h2><div class="chips" style="flex-wrap:wrap">${tpls.map(t=>`<button class="chip" data-tpl="${FIXED_TEMPLATES.indexOf(t)}">${cat(t.cat).icon} ${esc(t.name)}</button>`).join("")}</div></div>`:""}
-  <div class="note" style="margin:14px 4px">Se anotan solos cada mes, no tienes que hacer nada. Toca uno para cambiar el importe o borrarlo.</div>`;
+  <div class="note" style="margin:14px 4px">Los fijos <b>ya no se cuentan solos</b>: marca «Pagar» cuando pagues cada uno (entero o una parte) y solo entonces cuenta como gasto. Si llega el cargo desde el banco o el CSV, se marca solo. Toca el nombre para cambiar el importe o borrarlo.</div>`;
   $("#addFx").onclick=()=>openFixed({});
   document.querySelectorAll("[data-fx]").forEach(b=>b.onclick=()=>openFixed(S.fixed.find(f=>f.id===b.dataset.fx)));
+  const payFixed=(f,amount)=>{const day=Math.min(+f.day||1,daysIn(month));S.txs.push({id:uid(),type:f.type||"exp",amount:Math.round(amount*100)/100,cat:f.cat,note:f.name,date:`${month}-${pad(day)}`,fixedId:f.id,src:"manual",ts:Date.now(),created:Date.now(),ext:!!f.ext||undefined});save();renderFijos()};
   document.querySelectorAll("[data-pay]").forEach(b=>b.onclick=()=>{const f=S.fixed.find(x=>x.id===b.dataset.pay);if(!(+f.amount)){openFixed(f);toast("Primero pon el importe");return}
-    const day=Math.min(+f.day||1,daysIn(month));S.txs.push({id:uid(),type:f.type||"exp",amount:+f.amount,cat:f.cat,note:f.name,date:`${month}-${pad(day)}`,fixedId:f.id,src:"manual",ts:Date.now(),created:Date.now()});save();renderFijos();toast("Anotado ✓")});
+    const left=Math.round(((+f.amount)-fixedSum(f,month))*100)/100;if(left<=0){toast("Ya está pagado");return}payFixed(f,left);toast("Pagado ✓")});
+  document.querySelectorAll("[data-paypart]").forEach(b=>b.onclick=async()=>{const f=S.fixed.find(x=>x.id===b.dataset.paypart);if(!(+f.amount)){openFixed(f);toast("Primero pon el importe");return}
+    const left=Math.round(((+f.amount)-fixedSum(f,month))*100)/100;const a=await amountBox(`¿Cuánto has pagado de «${f.name}»?`,left>0?left:+f.amount);if(a>0){payFixed(f,a);toast("Anotado ✓")}});
+  document.querySelectorAll("[data-unpay]").forEach(b=>b.onclick=async()=>{const f=S.fixed.find(x=>x.id===b.dataset.unpay);const mine=S.txs.filter(t=>t.fixedId===f.id&&ymOf(t.date)===month&&(t.src==="manual"||t.src==="quick"));
+    if(!mine.length){toast("Este pago vino del banco, bórralo desde Movimientos");return}
+    if(await confirmBox(`¿Deshacer el pago de «${f.name}» de este mes?`,"Deshacer")){const ids=new Set(mine.map(t=>t.id));S.txs=S.txs.filter(t=>!ids.has(t.id));save();renderFijos()}});
   document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{const t=FIXED_TEMPLATES[+b.dataset.tpl];const f={id:uid(),amount:0,freq:"m",month:1,type:"exp",auto:true,since:todayISO(),...t};S.fixed.push(f);save();renderFijos();openFixed(f)});
 }
 
@@ -946,6 +954,7 @@ function closeSheet(now){
   s.classList.remove("show");c.classList.remove("show");setTimeout(()=>{s.remove();c.remove()},260);
 }
 function confirmBox(text,okLabel){return new Promise(res=>{openSheet(`<h3>${esc(text)}</h3><div class="grid2"><button class="btn sec" id="cNo">Cancelar</button><button class="btn danger" id="cYes">${esc(okLabel||"Aceptar")}</button></div>`,el=>{el.querySelector("#cNo").onclick=()=>{closeSheet();res(false)};el.querySelector("#cYes").onclick=()=>{closeSheet();res(true)}})})}
+function amountBox(text,def){return new Promise(res=>{openSheet(`<h3>${esc(text)}</h3><input class="amount-in num exp" id="aIn" inputmode="decimal" value="${def?amtStr(def):""}" placeholder="0,00 €"><div class="grid2" style="margin-top:12px"><button class="btn sec" id="aNo">Cancelar</button><button class="btn" id="aYes">Aceptar</button></div>`,el=>{const i=el.querySelector("#aIn");setTimeout(()=>{i.focus();i.select()},300);const ok=()=>{const v=parseAmt(i.value);closeSheet();res(v>0?v:0)};el.querySelector("#aNo").onclick=()=>{closeSheet();res(0)};el.querySelector("#aYes").onclick=ok;i.onkeydown=e=>{if(e.key==="Enter")ok()}})})}
 
 function drawRef(el){el._drawRef&&el._drawRef()}
 /* ============ Exportar tickets a un archivo para el ordenador ============ */
@@ -1256,10 +1265,7 @@ function openWizard(){
     }
     // saldo, ahorro, límites
     if(W.bal!=="")S.settings.balance={amount:+W.bal,ts:Date.now(),date:todayISO()};
-    // los fijos de este mes cuyo día ya pasó: marcados como hechos, sin tocar el saldo de hoy
-    {const ym=curYM(),d=new Date().getDate();
-     for(const f of S.fixed){if(!(+f.amount)||!fixedDue(f,ym)||fixedPaid(f,ym))continue;const day=Math.min(+f.day||1,daysIn(ym));
-       if(day<=d)S.txs.push({id:uid(),type:f.type||"exp",amount:+f.amount,cat:f.cat,note:f.name,date:`${ym}-${pad(day)}`,fixedId:f.id,src:"auto",ts:Date.now(),created:0,ext:!!f.ext||undefined})}}
+    // los fijos ya no se pre-anotan: se marcan a mano desde la pestaña de fijos
     {const g0=activeGoals()[0];if(g0)g0.monthly=+W.goal||0;else if(+W.goal>0)(S.goals=S.goals||[]).push({id:"g"+uid(),name:W.goalName,icon:"🏠",monthly:+W.goal,target:0,initial:0,start:curYM()+"-01"});syncGoals()}
     if(W.limState){for(const c of catsOf("exp")){if(!c.saving)c.budget=W.limState.lims[c.id]||0}S.settings.autoLimits=true}
     S.settings.onboarded=true;S.settings.personal=1;relinkFixed();if(activeGoals().length>1)applyAutoLimits();
