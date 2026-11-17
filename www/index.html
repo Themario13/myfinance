@@ -1351,6 +1351,8 @@ async function importCSV(file){
       if(S.txs.some(x=>x.id===id||x.bankId===id))continue;
       const type=r.amount<0?"exp":"inc",amount=Math.abs(r.amount);if(!amount)continue;
       const dd=new Date(r.date).getTime();
+      // retiradas de cajero: no son gasto, es pasar dinero a efectivo
+      if(type==="exp"&&/\breint(?:egro)?\b.*cajero|\bcajero\b/.test(norm(r.concept))){S.txs.push({id,bankId:id,transfer:"toCash",amount,note:"Sacar efectivo (cajero)",date:r.date,src:"import",ts:dd,created:0});added++;continue}
       const man=S.txs.find(x=>(x.src==="manual"||x.src==="quick")&&!x.bankId&&x.type===type&&Math.abs(x.amount-amount)<0.01&&Math.abs(new Date(x.date).getTime()-dd)<=4*864e5);
       if(man){man.bankId=id;linked++;continue}
       const g=classify(r.concept,type);
@@ -1362,6 +1364,7 @@ async function importCSV(file){
     // quitar los fijos «auto» que ahora tienen el cargo real del banco
     S.txs=S.txs.filter(t=>!(t.src==="auto"&&!t.ext&&touched.has(t.fixedId+"|"+ymOf(t.date))));
     if(balance!=null)S.settings.balance={amount:balance,ts:Date.now(),date:todayISO()};
+    if(!S.settings.cash)S.settings.cash={amount:0,ts:Date.now(),date:todayISO()};  // efectivo arranca en 0 (las retiradas pasadas ya están gastadas)
     S.settings.csvDate=last;S.settings.personal=1;S.settings.onboarded=true;
     relinkFixed();applyAutoLimits();save();render();
     toast(`${added} movimientos importados${linked?` · ${linked} ya los tenías`:""}${balance!=null?` · saldo ${money(balance)}`:""}`);
