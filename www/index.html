@@ -380,8 +380,8 @@ const refundTarget=t=>t.refundOf?S.txs.find(x=>x.id===t.refundOf):null;
 const goalRefund=t=>{const x=refundTarget(t);return x&&x.goal?x.goal:null};
 const refundsOf=id=>S.txs.filter(t=>t.refundOf===id).reduce((a,t)=>a+t.amount,0);
 /** exp = gasto neto (descontando lo que te devuelven los amigos); los traspasos a ahorro no son gasto. */
-function sums(ym){let inc=0,gross=0,ref=0,sav=0,gs=0;for(const t of txOfMonth(ym)){if(t.transfer)continue;if(goalRefund(t)){gs-=t.amount;continue}if(isRefund(t))ref+=t.amount;else if(t.type==="inc")inc+=t.amount;else if(t.goal)gs+=t.amount;else if(isSaving(t))sav+=t.amount;else gross+=t.amount}const exp=gross-ref;return{inc,exp,gross,ref,sav,gs,bal:inc-exp}}
-function byCat(ym,varOnly){const m={};let ref=0;for(const t of txOfMonth(ym)){if(t.transfer)continue;if(varOnly&&t.fixedId)continue;if(goalRefund(t))continue;if(isRefund(t)&&cat(t.cat).type==="exp")m[t.cat]=(m[t.cat]||0)-t.amount;else if(isRefund(t))ref+=t.amount;else if(t.type==="exp"&&!isSaving(t)&&!t.goal)m[t.cat]=(m[t.cat]||0)+t.amount}
+function sums(ym){let inc=0,gross=0,ref=0,sav=0,gs=0;for(const t of txOfMonth(ym)){if(t.transfer||t.cajero)continue;if(goalRefund(t)){gs-=t.amount;continue}if(isRefund(t))ref+=t.amount;else if(t.type==="inc")inc+=t.amount;else if(t.goal)gs+=t.amount;else if(isSaving(t))sav+=t.amount;else gross+=t.amount}const exp=gross-ref;return{inc,exp,gross,ref,sav,gs,bal:inc-exp}}
+function byCat(ym,varOnly){const m={};let ref=0;for(const t of txOfMonth(ym)){if(t.transfer||t.cajero)continue;if(varOnly&&t.fixedId)continue;if(goalRefund(t))continue;if(isRefund(t)&&cat(t.cat).type==="exp")m[t.cat]=(m[t.cat]||0)-t.amount;else if(isRefund(t))ref+=t.amount;else if(t.type==="exp"&&!isSaving(t)&&!t.goal)m[t.cat]=(m[t.cat]||0)+t.amount}
   // las devoluciones de amigos se descuentan de «comer fuera y ocio» (casi siempre son cenas a medias)
   if(ref&&m.ocio){const d=Math.min(m.ocio,ref);m.ocio-=d;ref-=d;if(m.ocio<=0.005)delete m.ocio}
   return Object.entries(m).filter(x=>x[1]>0.005).sort((a,b)=>b[1]-a[1])}
@@ -620,11 +620,24 @@ function bars6(){
   return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}">${g}</svg><div class="mini" style="justify-content:center;gap:16px;margin-top:6px"><span><span class="dot" style="background:#3ee6a8"></span>Ingresos</span><span><span class="dot" style="background:#ff6b6b"></span>Gastos</span>${goal?`<span>✓ ahorro cumplido</span>`:""}</div>`;
 }
 function txRow(t){
-  if(t.transfer){const to=t.transfer==="toCash";return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:var(--soft)">${to?"💵":"🏦"}</div><div class="mid"><div class="t">${to?"Sacar efectivo":"Ingresar al banco"}</div><div class="s">Traspaso · no es gasto</div></div><div class="amt num muted">${esc(money(t.amount))}</div></div>`}
+  if(t.cajero){return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:var(--soft)">🏧</div><div class="mid"><div class="t">Retirada de cajero</div><div class="s">¿A tu efectivo o fue gasto? <span class="tag rev">decidir</span></div></div><div class="amt num muted">${esc(money(t.amount))}</div></div>`}
+  if(t.transfer){const to=t.transfer==="toCash";return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:var(--soft)">${to?"💵":"🏦"}</div><div class="mid"><div class="t">${to?"A efectivo en casa":"Ingresar al banco"}</div><div class="s">Traspaso · no es gasto</div></div><div class="amt num muted">${esc(money(t.amount))}</div></div>`}
   const c=cat(t.cat);const back=t.type==="exp"?refundsOf(t.id):0,of=refundTarget(t);
   return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(t.note||c.name)}</div><div class="s">${esc(c.name)}${t.src==="bank"||t.src==="import"?'<span class="tag bank">banco</span>':""}${t.ext?'<span class="tag">otra cuenta</span>':""}${t.goal&&goalById(t.goal)?`<span class="tag auto">${esc(goalById(t.goal).icon||"🎯")} ${esc(goalById(t.goal).name.split(" ")[0])}</span>`:""}${t.src==="auto"?'<span class="tag auto">auto</span>':""}${t.review?'<span class="tag rev">revisar</span>':""}${t.cash?'<span class="tag">💵</span>':""}${t.photo?'<span class="tag">📎 ticket</span>':""}</div></div><div class="amt num ${t.type}">${t.type==="exp"?"−":"+"}${esc(money(t.amount))}${back?`<div class="note" style="font-weight:500">te devolvieron ${esc(money(back))}</div>`:""}${of?`<div class="note" style="font-weight:500">↩ ${esc((of.note||"").slice(0,18))}</div>`:""}</div></div>`;
 }
-function bindRows(root){root.querySelectorAll("[data-tx]").forEach(r=>r.onclick=()=>{const t=S.txs.find(x=>x.id===r.dataset.tx);if(t)openTx(t)})}
+function bindRows(root){root.querySelectorAll("[data-tx]").forEach(r=>r.onclick=()=>{const t=S.txs.find(x=>x.id===r.dataset.tx);if(t)(t.cajero?openCajero:openTx)(t)})}
+function openCajero(t){
+  openSheet(`<h3>Retirada de cajero</h3>
+   <div class="amount-in num exp" style="pointer-events:none">${esc(money(t.amount))}</div>
+   <div class="note" style="text-align:center;margin:-4px 0 14px">${esc(dayLabel(t.date))}</div>
+   <p style="margin:0 0 12px">¿Qué hiciste con ese dinero?</p>
+   <button class="btn block" id="cHome">💵 Fue a mi efectivo en casa</button>
+   <div class="note" style="margin:6px 2px 14px">Dinero que guardas en casa, no es un gasto. Suma a tu efectivo.</div>
+   <button class="btn sec block" id="cSpend">🏷️ Fue un gasto · elegir categoría</button>`,el=>{
+    el.querySelector("#cHome").onclick=()=>{const x=S.txs.find(y=>y.id===t.id);Object.assign(x,{transfer:"toCash",note:"A efectivo en casa",review:false});delete x.cajero;delete x.cat;save();closeSheet();render();toast("Guardado en tu efectivo 💵")};
+    el.querySelector("#cSpend").onclick=()=>{const x=S.txs.find(y=>y.id===t.id);delete x.cajero;x.note=x.note==="Retirada de cajero"?"":x.note;closeSheet(true);openTx(x)};
+  });
+}
 function renderHome(){
   const P=plan(month),isCur=month===curYM(),past=month<curYM();
   const goal=P.goal,gName=S.settings.goalName||"Ahorro";
@@ -744,7 +757,7 @@ function renderMovs(){
   const rc=S.txs.filter(t=>t.review).length;
   $("#main").innerHTML=`<input class="search" id="q" placeholder="Buscar (ej: mercadona)" value="${esc(query)}">
   <div class="chips">${[["all","Todos"],["exp","Gastos"],["inc","Ingresos"],["review",`Por revisar${rc?" ("+rc+")":""}`]].map(([k,l])=>`<button class="chip ${filter===k?"on":""}" data-f="${k}">${l}</button>`).join("")}</div>
-  ${list.length?Object.entries(groups).map(([d,ts])=>{const tot=ts.reduce((a,t)=>a+(t.transfer?0:t.type==="exp"?-t.amount:t.amount),0);return `<div class="day"><span>${esc(dayLabel(d))}</span><span class="num">${tot>0?"+":""}${esc(money(tot))}</span></div><div class="card" style="padding:4px 16px">${ts.map(txRow).join("")}</div>`}).join(""):`<div class="card empty" style="margin-top:12px">${filter==="review"?"Todo clasificado 👌":"No hay movimientos"}</div>`}`;
+  ${list.length?Object.entries(groups).map(([d,ts])=>{const tot=ts.reduce((a,t)=>a+(t.transfer||t.cajero?0:t.type==="exp"?-t.amount:t.amount),0);return `<div class="day"><span>${esc(dayLabel(d))}</span><span class="num">${tot>0?"+":""}${esc(money(tot))}</span></div><div class="card" style="padding:4px 16px">${ts.map(txRow).join("")}</div>`}).join(""):`<div class="card empty" style="margin-top:12px">${filter==="review"?"Todo clasificado 👌":"No hay movimientos"}</div>`}`;
   const q=$("#q");q.oninput=()=>{query=q.value;const pos=q.selectionStart;renderMovs();const n=$("#q");n.focus();n.setSelectionRange(pos,pos)};
   document.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{filter=b.dataset.f;renderMovs()});
   bindRows($("#main"));
@@ -1290,7 +1303,7 @@ function detectRecurring(){
     const day=Math.max(1,Math.min(31,Math.round(median(samp.map(t=>+t.date.slice(8))))));
     const cand={key:k,name,cat:g.cat,amount:Math.round(median(near)*100)/100,day,months:complete,on:true};
     if(type==="inc"){if(cand.amount>=200)income.push(cand)}
-    else if(cand.amount>=5)fixed.push(cand);
+    else if(cand.amount>=5&&cand.cat!=="ocio")fixed.push(cand);   // los bares/restaurantes son ocio, nunca un fijo
   }
   fixed.sort((a,b)=>b.amount-a.amount);income.sort((a,b)=>b.amount-a.amount);
   return{fixed:fixed.slice(0,14),income};
@@ -1352,7 +1365,7 @@ async function importCSV(file){
       const type=r.amount<0?"exp":"inc",amount=Math.abs(r.amount);if(!amount)continue;
       const dd=new Date(r.date).getTime();
       // retiradas de cajero: no son gasto, es pasar dinero a efectivo
-      if(type==="exp"&&/\breint(?:egro)?\b.*cajero|\bcajero\b/.test(norm(r.concept))){S.txs.push({id,bankId:id,transfer:"toCash",amount,note:"Sacar efectivo (cajero)",date:r.date,src:"import",ts:dd,created:0});added++;continue}
+      if(type==="exp"&&/\breint(?:egro)?\b.*cajero|\bcajero\b/.test(norm(r.concept))){S.txs.push({id,bankId:id,type:"exp",amount,cat:"otros",cajero:true,review:true,note:"Retirada de cajero",date:r.date,src:"import",ts:dd,created:0});added++;continue}
       const man=S.txs.find(x=>(x.src==="manual"||x.src==="quick")&&!x.bankId&&x.type===type&&Math.abs(x.amount-amount)<0.01&&Math.abs(new Date(x.date).getTime()-dd)<=4*864e5);
       if(man){man.bankId=id;linked++;continue}
       const g=classify(r.concept,type);
