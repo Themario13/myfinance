@@ -291,7 +291,7 @@ const FIXED_TEMPLATES=[
  {name:"Préstamo",cat:"hipoteca",day:1,match:"",amount:0,freq:"m"},
  {name:"IBI (una vez al año)",cat:"seguros",day:1,match:"ibi",amount:0,freq:"y",month:10},
 ];
-function freshState(){return{v:2,goals:[],txs:[],cats:DEFAULT_CATS.map(c=>({...c})),fixed:[],rules:[],settings:{balance:null,cash:null,saveGoal:0,goalName:"Mi ahorro",onboarded:false,notif:false,notifAsked:false},bank:{appId:"",pem:"",redirect:"",aspsp:"",country:"ES",sessionId:"",validUntil:"",accounts:[],lastSync:0,pendingState:""}}}
+function freshState(){return{v:2,goals:[],txs:[],cats:DEFAULT_CATS.map(c=>({...c})),fixed:[],rules:[],settings:{balance:null,cash:null,saveGoal:0,goalName:"Mi ahorro",onboarded:false,notif:true,notifAsked:false},bank:{appId:"",pem:"",redirect:"",aspsp:"",country:"ES",sessionId:"",validUntil:"",accounts:[],lastSync:0,pendingState:""}}}
 let S;
 function normalize(){
   const f=freshState();
@@ -304,7 +304,9 @@ function normalize(){
     for(const c of S.cats){const d=DEFAULT_CATS.find(x=>x.id===c.id);if(d)c.color=d.color}
     S.v=2;
   }
-  for(const fx of S.fixed){if(fx.auto===undefined)fx.auto=true}
+  for(const fx of S.fixed){if(fx.auto===undefined)fx.auto=false}
+  // migración: los fijos pasan a manual por defecto (tú marcas «Pagar»); activa «Anotar solo» en los que quieras
+  if(!S.settings.fijosManualMig){for(const fx of S.fixed)fx.auto=false;S.settings.fijosManualMig=1}
   if(!S.goals){
     S.goals=[];const st=S.settings;
     if(+st.saveGoal>0||+st.goalTarget>0||S.txs.some(t=>t.goal)){
@@ -574,11 +576,22 @@ function totalMoney(){
 }
 /** Anota solos los fijos cuyo día ya ha llegado (si no hay banco conectado). */
 function autoFixed(){
-  // Los fijos ya NO se anotan solos: los marcas tú (botón Pagar) o llegan con el cargo real del banco/CSV.
-  // Aquí solo limpiamos los «auto» antiguos para que no se dupliquen.
-  const before=S.txs.length;S.txs=S.txs.filter(t=>t.src!=="auto");
-  if(S.txs.length!==before)save();
-  return 0;
+  // Solo los fijos con «Anotar solo» (auto) se apuntan solos. Es idempotente: borra lo auto y
+  // recrea únicamente lo que NO esté ya cubierto por cargos reales/manuales, así nunca duplica.
+  S.txs=S.txs.filter(t=>t.src!=="auto");
+  const ym=curYM(),d=new Date().getDate();let n=0;
+  for(const f of S.fixed){
+    if(f.auto!==true||!(+f.amount)||!fixedDue(f,ym))continue;
+    const day=Math.min(+f.day||1,daysIn(ym));
+    if(day>d)continue;                                                               // aún no ha llegado su día
+    if(f.since&&`${ym}-${pad(day)}`<f.since)continue;
+    if(!f.ext&&S.settings.csvDate&&`${ym}-${pad(day)}`<=S.settings.csvDate)continue; // ya cubierto por el extracto
+    const realDone=S.txs.filter(t=>t.fixedId===f.id&&ymOf(t.date)===ym).reduce((a,t)=>a+t.amount,0);
+    const left=Math.round(((+f.amount)-realDone)*100)/100;
+    if(left<=0.005)continue;                                                         // ya pagado por el cargo real o a mano
+    S.txs.push({id:uid(),type:f.type||"exp",amount:left,cat:f.cat,note:f.name,date:`${ym}-${pad(day)}`,fixedId:f.id,src:"auto",ts:Date.now(),created:0,ext:!!f.ext||undefined});n++;
+  }
+  save();return n;
 }
 
 /* ============ Navegación ============ */
@@ -617,7 +630,7 @@ function txRow(t){
   if(t.cajero){return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:var(--soft)">🏧</div><div class="mid"><div class="t">Retirada de cajero</div><div class="s">¿A tu efectivo o fue gasto? <span class="tag rev">decidir</span></div></div><div class="amt num muted">${esc(money(t.amount))}</div></div>`}
   if(t.transfer){const to=t.transfer==="toCash";return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:var(--soft)">${to?"💵":"🏦"}</div><div class="mid"><div class="t">${to?"A efectivo en casa":"Ingresar al banco"}</div><div class="s">Traspaso · no es gasto</div></div><div class="amt num muted">${esc(money(t.amount))}</div></div>`}
   const c=cat(t.cat);const back=t.type==="exp"?refundsOf(t.id):0,of=refundTarget(t);
-  return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(t.note||c.name)}</div><div class="s">${esc(c.name)}${t.src==="bank"||t.src==="import"?'<span class="tag bank">banco</span>':""}${t.ext?'<span class="tag">otra cuenta</span>':""}${t.goal&&goalById(t.goal)?`<span class="tag auto">${esc(goalById(t.goal).icon||"🎯")} ${esc(goalById(t.goal).name.split(" ")[0])}</span>`:""}${t.src==="auto"?'<span class="tag auto">auto</span>':""}${t.review?'<span class="tag rev">revisar</span>':""}${t.cash?'<span class="tag">💵</span>':""}${t.photo?'<span class="tag">📎 ticket</span>':""}</div></div><div class="amt num ${t.type}">${t.type==="exp"?"−":"+"}${esc(money(t.amount))}${back?`<div class="note" style="font-weight:500">te devolvieron ${esc(money(back))}</div>`:""}${of?`<div class="note" style="font-weight:500">↩ ${esc((of.note||"").slice(0,18))}</div>`:""}</div></div>`;
+  return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(t.note||c.name)}</div><div class="s">${esc(c.name)}${t.src==="bank"||t.src==="import"?'<span class="tag bank">banco</span>':""}${t.ext?'<span class="tag">otra cuenta</span>':""}${t.goal&&goalById(t.goal)?`<span class="tag auto">${esc(goalById(t.goal).icon||"🎯")} ${esc(goalById(t.goal).name.split(" ")[0])}</span>`:""}${t.src==="auto"?'<span class="tag auto">auto</span>':""}${t.review?'<span class="tag rev">revisar</span>':""}${t.cash?'<span class="tag">💵</span>':""}${t.fixedId?'<span class="tag auto">📅 fijo</span>':""}</div></div><div class="amt num ${t.type}">${t.type==="exp"?"−":"+"}${esc(money(t.amount))}${back?`<div class="note" style="font-weight:500">te devolvieron ${esc(money(back))}</div>`:""}${of?`<div class="note" style="font-weight:500">↩ ${esc((of.note||"").slice(0,18))}</div>`:""}</div></div>`;
 }
 function bindRows(root){root.querySelectorAll("[data-tx]").forEach(r=>r.onclick=()=>{const t=S.txs.find(x=>x.id===r.dataset.tx);if(t)(t.cajero?openCajero:openTx)(t)})}
 function openCajero(t){
@@ -821,8 +834,8 @@ function renderFijos(){
       <div class="mid tap" data-fx="${f.id}" style="cursor:pointer"><div class="t">${esc(f.name)}${paid?' <span class="tag auto">pagado ✓</span>':""}</div><div class="s">${(f.freq||"m")==="m"?"Cada mes":"Cada año ("+monthName("2000-"+pad(f.month||1),true).replace(".","")+")"} · día ${f.day}${f.ext?" · otra cuenta":""}${c.saving?" · va a tu ahorro":""}</div></div>
       <div class="amt num ${inc?"inc":""}">${amt?esc(money(amt)):"—"}</div></div>
       ${amt&&!inc?`<div class="bar thin"><i style="width:${pct}%;background:${col}"></i></div>
-      <div class="row" style="padding:6px 0 0;align-items:center"><div class="s" style="flex:1">${done>0?`Pagado ${esc(money(done))} de ${esc(money(amt))}`:"Sin pagar este mes"}</div>
-        ${paid?`<button class="btn sm sec" data-unpay="${f.id}">Deshacer</button>`:`<button class="btn sm sec" data-paypart="${f.id}" style="margin-right:6px">Parte…</button><button class="btn sm" data-pay="${f.id}">Pagar${done>0?" resto":""}</button>`}</div>`:""}
+      <div class="row" style="padding:6px 0 0;align-items:center"><div class="s" style="flex:1">${f.auto?`⚙️ Se anota solo · ${done>0?`puesto ${esc(money(done))}`:"pendiente este mes"}`:done>0?`Pagado ${esc(money(done))} de ${esc(money(amt))}`:"Sin pagar este mes"}</div>
+        ${f.auto?"":paid?`<button class="btn sm sec" data-unpay="${f.id}">Deshacer</button>`:`<button class="btn sm sec" data-paypart="${f.id}" style="margin-right:6px">Parte…</button><button class="btn sm" data-pay="${f.id}">Pagar${done>0?" resto":""}</button>`}</div>`:""}
     </div>`};
   $("#main").innerHTML=`
   <div class="card"><h2>Lo que pagas cada mes</h2>
@@ -844,7 +857,7 @@ function renderFijos(){
   document.querySelectorAll("[data-unpay]").forEach(b=>b.onclick=async()=>{const f=S.fixed.find(x=>x.id===b.dataset.unpay);const mine=S.txs.filter(t=>t.fixedId===f.id&&ymOf(t.date)===month&&(t.src==="manual"||t.src==="quick"));
     if(!mine.length){toast("Este pago vino del banco, bórralo desde Movimientos");return}
     if(await confirmBox(`¿Deshacer el pago de «${f.name}» de este mes?`,"Deshacer")){const ids=new Set(mine.map(t=>t.id));S.txs=S.txs.filter(t=>!ids.has(t.id));save();renderFijos()}});
-  document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{const t=FIXED_TEMPLATES[+b.dataset.tpl];const f={id:uid(),amount:0,freq:"m",month:1,type:"exp",auto:true,since:todayISO(),...t};S.fixed.push(f);save();renderFijos();openFixed(f)});
+  document.querySelectorAll("[data-tpl]").forEach(b=>b.onclick=()=>{const t=FIXED_TEMPLATES[+b.dataset.tpl];const f={id:uid(),amount:0,freq:"m",month:1,type:"exp",auto:false,since:todayISO(),...t};S.fixed.push(f);save();renderFijos();openFixed(f)});
 }
 
 /* ============ Ajustes ============ */
@@ -890,23 +903,14 @@ function renderAjustes(){
   <div class="card"><h2>Lo que he aprendido</h2>
     ${S.rules.length?S.rules.map((r,i)=>`<div class="row"><div class="mid"><div class="t">«${esc(r.key)}» → ${cat(r.cat).icon} ${esc(cat(r.cat).name)}</div></div><button class="btn sm sec" data-rdel="${i}">Olvidar</button></div>`).join(""):`<div class="note">Cuando cambies la categoría de un movimiento, recordaré el comercio para clasificarlo solo la próxima vez.</div>`}
   </div>
-  <div class="card"><h2>Tickets</h2>
-    <div class="note" style="margin-bottom:10px">Guarda la foto del ticket al anotar un gasto. Aquí los exportas todos a un archivo que abres en el ordenador (por correo, Drive, WhatsApp o cable).</div>
-    <div class="mini" style="margin-bottom:10px"><span>Gastos con foto</span><b class="num" id="tkCount">…</b></div>
-    <div class="set-row"><div class="mid"><b>Leer el ticket <span class="tag">en pruebas</span></b><div class="s">Al hacer la foto, intenta rellenar el importe y la fecha para que los confirmes.</div></div><button class="sw ${S.settings.ocr!==false?"on":""}" id="swOcr"></button></div>
-    <button class="btn sec block" id="tkExport">📤 Exportar tickets</button>
-  </div>
   <div class="card"><h2>Copia de seguridad</h2>
-    <div class="note" style="margin-bottom:10px">Tus datos se guardan solo en este móvil. Haz una copia de vez en cuando. (Las fotos de tickets no entran en esta copia; para guardarlas usa «Exportar tickets».)</div>
+    <div class="note" style="margin-bottom:10px">Tus datos se guardan solo en este móvil. Haz una copia de vez en cuando.</div>
     <div class="grid2"><button class="btn sec" id="exp1">Descargar copia</button><button class="btn sec" id="exp2">Copiar texto</button></div>
     <label class="btn sec block" style="margin-top:8px">Restaurar desde archivo<input type="file" id="imp" accept=".json,application/json" hidden></label>
     <button class="btn danger block" style="margin-top:8px" id="wipe">Borrar todos los datos</button>
   </div>
   ${(()=>{let l=[];try{l=JSON.parse(localStorage.getItem("miscuentas.errs")||"[]")}catch(_){}return l.length?`<div class="card"><h2>Diagnóstico <a id="errClr">Borrar</a></h2><div class="note">Si algo falla, copia esto y pásamelo:</div><div style="font-family:ui-monospace,monospace;font-size:11px;color:var(--muted);margin-top:8px;max-height:160px;overflow:auto">${l.map(esc).join("<br>")}</div><button class="btn sec block" id="errCopy" style="margin-top:10px">Copiar errores</button></div>`:""})()}
   <div class="note" style="text-align:center;margin:10px 0 20px">Mis Cuentas · hecha para ti</div>`;
-  photoCount().then(n=>{const e=$("#tkCount");if(e)e.textContent=n});
-  {const o=$("#swOcr");if(o)o.onclick=()=>{S.settings.ocr=S.settings.ocr===false;save();o.classList.toggle("on",S.settings.ocr!==false)}}
-  $("#tkExport").onclick=exportTickets;
   {const ec=$("#errCopy");if(ec)ec.onclick=async()=>{try{await navigator.clipboard.writeText(localStorage.getItem("miscuentas.errs")||"");toast("Copiado")}catch(e){toast("No se pudo copiar")}};const ex=$("#errClr");if(ex)ex.onclick=()=>{localStorage.removeItem("miscuentas.errs");renderAjustes()}}
   document.querySelectorAll("[data-go]").forEach(r=>r.onclick=()=>({nomina:()=>openFixed(nomina()||{type:"inc",cat:"nomina",name:"Nómina",day:28,auto:true,match:"nomina"}),balance:openBalance,cash:openCash,goal:()=>go("goals"),fijos:()=>go("fijos"),limits:openLimits})[r.dataset.go]());
   $("#reWiz").onclick=openWizard;
@@ -1052,6 +1056,7 @@ function openTx(t){
     el.querySelector("#tRefRow").style.display=type==="inc"&&!fromBank||(type==="inc"&&fromBank)?"":"none";
     if(type==="inc")drawRef(el);
     if(type!=="exp")el.querySelector("#tGoalRow").style.display="none";else if(activeGoals().length||t.goal)el.querySelector("#tGoalRow").style.display="";
+    const fxr=el.querySelector("#tFixRow");if(fxr)fxr.style.display=type==="exp"&&S.fixed.some(f=>(f.type||"exp")==="exp")?"":"none";
   };
   openSheet(`<h3>${isNew?"Nuevo movimiento":fromBank?"Movimiento del banco":"Editar movimiento"}</h3>
    ${fromBank?"":`<div class="seg"><button data-t="exp">Gasto</button><button data-t="inc">Ingreso</button></div>`}
@@ -1063,7 +1068,8 @@ function openTx(t){
      <div class="chips" style="flex-wrap:wrap"><button class="chip ${t.goal?"":"on"}" data-g="">No</button>${(S.goals||[]).filter(g=>!g.archived||g.id===t.goal).map(g=>`<button class="chip ${t.goal===g.id?"on":""}" data-g="${g.id}">${esc(g.icon||"🎯")} ${esc(g.name)}</button>`).join("")}</div></div>
    <div class="set-row" id="tCashRow" style="border:0;padding-top:0"><div class="mid"><b>💵 En efectivo</b><div class="s">Sale o entra de tu bolsillo de efectivo, no del banco</div></div><button class="sw ${t.cash?"on":""}" id="tCash"></button></div>
    <label class="field"><span>Fecha</span><input class="in" type="date" id="tDate" value="${t.date||todayISO()}" ${fromBank?"readonly":""}></label>
-   <div class="field"><span>📷 Foto del ticket (opcional)</span><div id="tPhotoBox"></div><div id="tOcr" class="note" style="margin-top:6px"></div><input type="file" id="tPhotoIn" accept="image/*" hidden></div>
+   <div class="field" id="tFixRow" style="display:none"><span>📅 ¿Es el pago de un gasto fijo? <span style="font-weight:500">(se asocia a ese fijo; no se cuenta dos veces)</span></span>
+     <div class="chips" style="flex-wrap:wrap"><button class="chip ${t.fixedId?"":"on"}" data-fx2="">No, es un gasto normal</button>${S.fixed.filter(f=>(f.type||"exp")==="exp").map(f=>`<button class="chip ${t.fixedId===f.id?"on":""}" data-fx2="${f.id}">${cat(f.cat).icon} ${esc(f.name)}</button>`).join("")}</div></div>
    <button class="btn block" id="tSave">${isNew?"Guardar":"Guardar cambios"}</button>
    ${!isNew?`<button class="btn danger block" id="tDel" style="margin-top:8px">Eliminar</button>`:""}`,el=>{
     el.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{type=b.dataset.t;if(sel&&cat(sel).type!==type)sel=null;draw(el)});
@@ -1081,15 +1087,8 @@ function openTx(t){
       };
     };
     let cashOn=!!t.cash;const csw=el.querySelector("#tCash");csw.onclick=()=>{cashOn=!cashOn;csw.classList.toggle("on",cashOn)};
-    let photoId=t.photo?t.id:null,photoData=null,photoChanged=false;const pin=el.querySelector("#tPhotoIn");
-    const drawPhoto=async()=>{const box=el.querySelector("#tPhotoBox");let src=photoData;if(!src&&photoId&&!photoChanged)src=await photoGet(photoId);
-      if(src){box.innerHTML=`<div style="position:relative"><img id="tPhotoImg" src="${src}" style="width:100%;max-height:220px;object-fit:cover;border-radius:13px;display:block"><button class="btn sm danger" id="tPhotoX" style="position:absolute;top:8px;right:8px">Quitar</button></div>`;
-        box.querySelector("#tPhotoImg").onclick=()=>viewPhoto(src);box.querySelector("#tPhotoX").onclick=()=>{photoData=null;photoId=null;photoChanged=true;drawPhoto()}}
-      else box.innerHTML=`<button class="btn sec block" id="tPhotoAdd">📷 Añadir foto del ticket</button>`;
-      const a=box.querySelector("#tPhotoAdd");if(a)a.onclick=()=>pin.click()};
-    pin.onchange=async()=>{const f=pin.files&&pin.files[0];if(!f)return;try{photoData=await compressImg(f);photoChanged=true;await drawPhoto();if(type==="exp")ocrSuggest(el,photoData)}catch(e){toast("No se pudo cargar la imagen")}pin.value=""};
-    drawPhoto();
-    let goalId=t.goal||"";el.querySelectorAll("[data-g]").forEach(b=>b.onclick=()=>{goalId=b.dataset.g;el.querySelectorAll("[data-g]").forEach(x=>x.classList.toggle("on",x===b))});
+    let fixId=t.fixedId||"";el.querySelectorAll("[data-fx2]").forEach(b=>b.onclick=()=>{fixId=b.dataset.fx2;el.querySelectorAll("[data-fx2]").forEach(x=>x.classList.toggle("on",x===b));if(fixId){const f=S.fixed.find(x=>x.id===fixId);if(f){sel=f.cat;goalId="";el.querySelectorAll("[data-g]").forEach(x=>x.classList.toggle("on",x.dataset.g===""));draw(el)}}});
+    let goalId=t.goal||"";el.querySelectorAll("[data-g]").forEach(b=>b.onclick=()=>{goalId=b.dataset.g;el.querySelectorAll("[data-g]").forEach(x=>x.classList.toggle("on",x===b));if(goalId){fixId="";el.querySelectorAll("[data-fx2]").forEach(x=>x.classList.toggle("on",x.dataset.fx2===""))}});
     draw(el);
     const amt=el.querySelector("#tAmt"),note=el.querySelector("#tNote");
     if(isNew)setTimeout(()=>amt.focus(),300);
@@ -1100,14 +1099,15 @@ function openTx(t){
       const prevCat=t.cat;
       const g=type==="exp"&&goalId?goalId:undefined;
       const rf=type==="inc"&&refId?refId:undefined;if(rf){const tg=S.txs.find(x=>x.id===rf);if(tg)sel=tg.cat}
+      const fx=type==="exp"&&fixId?fixId:undefined;if(fx){const f=S.fixed.find(x=>x.id===fx);if(f)sel=f.cat}
       const id=isNew?uid():t.id;
-      if(isNew){S.txs.push({id,type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||todayISO(),src:"manual",ts:Date.now(),created:Date.now(),goal:g,refundOf:rf,cash:cashOn||undefined})}
-      else{const x=S.txs.find(y=>y.id===t.id);Object.assign(x,{type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||x.date,review:false,goal:g,refundOf:rf,cash:cashOn||undefined});
-        if(prevCat!==sel&&!rf){const r=learn(x,sel);if(r)toast(`Aprendido: «${r.key}» → ${cat(sel).name}${r.n?` (+${r.n})`:""}`)}}
-      if(photoChanged){const x=S.txs.find(y=>y.id===id);if(photoData){try{await photoPut(id,photoData);x.photo=true}catch(e){toast("No se pudo guardar la foto")}}else{await photoDel(id);delete x.photo}}
-      save();closeSheet();render();if(rf&&!isNew)toast("Devolución asociada ↩");if(isNew)toast(rf?"Devolución anotada ↩":g?`Anotado en «${goalById(g).name}» 🎯`:type==="exp"?"Gasto anotado":"Ingreso anotado");
+      if(isNew){S.txs.push({id,type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||todayISO(),src:"manual",ts:Date.now(),created:Date.now(),goal:g,refundOf:rf,cash:cashOn||undefined,fixedId:fx})}
+      else{const x=S.txs.find(y=>y.id===t.id);Object.assign(x,{type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||x.date,review:false,goal:g,refundOf:rf,cash:cashOn||undefined,fixedId:fx});
+        if(prevCat!==sel&&!rf&&!fx){const r=learn(x,sel);if(r)toast(`Aprendido: «${r.key}» → ${cat(sel).name}${r.n?` (+${r.n})`:""}`)}}
+      if(fx){const m=ymOf(el.querySelector("#tDate").value||t.date||todayISO());S.txs=S.txs.filter(y=>!(y.src==="auto"&&y.fixedId===fx&&ymOf(y.date)===m&&y.id!==id))}  // quita el auto-anotado para no duplicar
+      save();closeSheet();render();if(isNew)toast(fx?`Asociado a «${S.fixed.find(f=>f.id===fx).name}» 📅`:rf?"Devolución anotada ↩":g?`Anotado en «${goalById(g).name}» 🎯`:type==="exp"?"Gasto anotado":"Ingreso anotado");else if(rf)toast("Devolución asociada ↩");else if(fx)toast("Asociado al fijo 📅");
     };
-    const del=el.querySelector("#tDel");if(del)del.onclick=async()=>{closeSheet(true);if(await confirmBox("¿Eliminar este movimiento?","Eliminar")){if(t.photo)photoDel(t.id);S.txs=S.txs.filter(x=>x.id!==t.id);save();render()}};
+    const del=el.querySelector("#tDel");if(del)del.onclick=async()=>{closeSheet(true);if(await confirmBox("¿Eliminar este movimiento?","Eliminar")){S.txs=S.txs.filter(x=>x.id!==t.id);save();render()}};
   });
 }
 function openFixed(f){
@@ -1120,12 +1120,12 @@ function openFixed(f){
    <div class="grid2"><label class="field"><span>Frecuencia</span><select class="in" id="fFreq"><option value="m">Cada mes</option><option value="y" ${f.freq==="y"?"selected":""}>Una vez al año</option></select></label>
    <label class="field" id="fMonthW"><span>Mes</span><select class="in" id="fMonth">${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${+(f.month||1)===i+1?"selected":""}>${monthName("2000-"+pad(i+1)).replace(" de 2000","")}</option>`).join("")}</select></label></div>
    <label class="field"><span>Categoría</span><select class="in" id="fCat"></select></label>
-   <div class="set-row" style="border:0;padding-top:0"><div class="mid"><b>Anotar solo</b><div class="s">Se apunta automáticamente el día que toca</div></div><button class="sw ${f.auto!==false?"on":""}" id="fAuto"></button></div>
+   <div class="set-row" style="border:0;padding-top:0"><div class="mid"><b>Anotar solo</b><div class="s">Se apunta automáticamente el día que toca. Si llega el cargo real, se asocia y no se duplica. Si lo dejas apagado, lo marcas tú con «Pagar».</div></div><button class="sw ${f.auto===true?"on":""}" id="fAuto"></button></div>
    <div class="set-row" style="border:0;padding-top:0"><div class="mid"><b>Desde otra cuenta</b><div class="s">Cuenta en tu plan, pero no resta del saldo de esta cuenta</div></div><button class="sw ${f.ext?"on":""}" id="fExt"></button></div>
    <label class="field"><span>Texto en el banco (opcional)</span><input class="in" id="fMatch" value="${esc(f.match||"")}" placeholder="Ej: hipoteca, iberdrola…" autocapitalize="off"></label>
    <button class="btn block" id="fSave">Guardar</button>
    ${!isNew?`<button class="btn danger block" id="fDel" style="margin-top:8px">Eliminar</button>`:""}`,el=>{
-    let auto=f.auto!==false;const sw=el.querySelector("#fAuto");sw.onclick=()=>{auto=!auto;sw.classList.toggle("on",auto)};
+    let auto=f.auto===true;const sw=el.querySelector("#fAuto");sw.onclick=()=>{auto=!auto;sw.classList.toggle("on",auto)};
     let ext=!!f.ext;const sx=el.querySelector("#fExt");sx.onclick=()=>{ext=!ext;sx.classList.toggle("on",ext)};
     const fill=()=>{el.querySelector("#fCat").innerHTML=catsOf(type).map(c=>`<option value="${c.id}" ${f.cat===c.id?"selected":""}>${c.icon} ${esc(c.name)}</option>`).join("")};fill();
     const fm=()=>el.querySelector("#fMonthW").style.visibility=el.querySelector("#fFreq").value==="y"?"visible":"hidden";fm();el.querySelector("#fFreq").onchange=fm;
@@ -1260,7 +1260,7 @@ function openWizard(){
     // fijos
     for(const f of [...W.fixed,...W.extra]){
       const ex=S.fixed.find(x=>x.name===f.name&&x.type!=="inc");
-      if(f.on){if(ex)Object.assign(ex,{amount:+f.amount||0,cat:f.cat,day:f.day||ex.day,match:f.match!==undefined?f.match:ex.match,ext:!!f.ext,freq:f.freq||ex.freq||"m",month:f.month||ex.month||1});else S.fixed.push({id:uid(),name:f.name,type:"exp",cat:f.cat,amount:+f.amount||0,day:f.day||1,freq:f.freq||"m",month:f.month||1,auto:true,ext:!!f.ext,match:f.match||"",since:todayISO()})}
+      if(f.on){if(ex)Object.assign(ex,{amount:+f.amount||0,cat:f.cat,day:f.day||ex.day,match:f.match!==undefined?f.match:ex.match,ext:!!f.ext,freq:f.freq||ex.freq||"m",month:f.month||ex.month||1});else S.fixed.push({id:uid(),name:f.name,type:"exp",cat:f.cat,amount:+f.amount||0,day:f.day||1,freq:f.freq||"m",month:f.month||1,auto:false,ext:!!f.ext,match:f.match||"",since:todayISO()})}
       else if(ex)S.fixed=S.fixed.filter(x=>x!==ex);
     }
     // saldo, ahorro, límites
@@ -1337,7 +1337,7 @@ function offerDetected(auto){
       let n=0;
       for(const x of all){if(!x.on||!(+x.amount))continue;
         if(x.type==="inc"&&x.cat==="nomina"){const nm=nomina();if(nm){Object.assign(nm,{amount:+x.amount,day:x.day,match:x.key});n++;continue}}
-        S.fixed.push({id:uid(),name:x.name,type:x.type,cat:x.cat,amount:+x.amount,day:x.day,freq:"m",month:1,auto:true,match:x.key,since:todayISO()});n++;
+        S.fixed.push({id:uid(),name:x.name,type:x.type,cat:x.cat,amount:+x.amount,day:x.day,freq:"m",month:1,auto:x.type==="inc",match:x.key,since:todayISO()});n++;
       }
       syncGoals();relinkFixed();applyAutoLimits();save();closeSheet();render();toast(`${n} ${n===1?"añadido":"añadidos"} ✓`);
     };
@@ -1385,7 +1385,7 @@ async function importCSV(file){
     if(balance!=null)S.settings.balance={amount:balance,ts:Date.now(),date:todayISO()};
     if(!S.settings.cash)S.settings.cash={amount:0,ts:Date.now(),date:todayISO()};  // efectivo arranca en 0 (las retiradas pasadas ya están gastadas)
     S.settings.csvDate=last;S.settings.personal=1;S.settings.onboarded=true;
-    relinkFixed();applyAutoLimits();save();render();
+    relinkFixed();autoFixed();applyAutoLimits();save();render();
     toast(`${added} movimientos importados${linked?` · ${linked} ya los tenías`:""}${balance!=null?` · saldo ${money(balance)}`:""}`);
     setTimeout(()=>offerDetected(true),500);
   }catch(e){logErr("importar",e);toast("No se pudo leer el archivo: "+e.message)}
