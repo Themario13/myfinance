@@ -950,10 +950,14 @@ function renderAjustes(){
     <button class="btn sec block" id="updBtn" style="margin-top:10px">Buscar actualización</button>
   </div>
   <div class="card"><h2>Copia de seguridad</h2>
-    <div class="note" style="margin-bottom:10px">Tus datos se guardan solo en este móvil. Haz una copia de vez en cuando. Aun así, antes de actualizar puedes descargar una copia por si acaso.</div>
-    <div class="grid2"><button class="btn sec" id="exp1">Descargar copia</button><button class="btn sec" id="exp2">Copiar texto</button></div>
-    <label class="btn sec block" style="margin-top:8px">Restaurar desde archivo<input type="file" id="imp" accept=".json,application/json" hidden></label>
-    <button class="btn danger block" style="margin-top:8px" id="wipe">Borrar todos los datos</button>
+    <div class="note" style="margin-bottom:10px">Tus datos se guardan solo en este móvil. Haz una copia de vez en cuando (y siempre antes de desinstalar).</div>
+    <button class="btn block" id="expShare">📤 Guardar / compartir copia</button>
+    <div class="grid2" style="margin-top:8px"><button class="btn sec" id="exp1">Descargar</button><button class="btn sec" id="exp2">Copiar texto</button></div>
+    <div style="height:1px;background:var(--line);margin:14px 0"></div>
+    <div class="note" style="margin-bottom:8px"><b>Restaurar</b> una copia guardada:</div>
+    <label class="btn sec block">Restaurar desde archivo<input type="file" id="imp" accept=".json,application/json" hidden></label>
+    <button class="btn sec block" style="margin-top:8px" id="impText">Restaurar pegando texto</button>
+    <button class="btn danger block" style="margin-top:14px" id="wipe">Borrar todos los datos</button>
   </div>
   ${(()=>{let l=[];try{l=JSON.parse(localStorage.getItem("miscuentas.errs")||"[]")}catch(_){}return l.length?`<div class="card"><h2>Diagnóstico <a id="errClr">Borrar</a></h2><div class="note">Si algo falla, copia esto y pásamelo:</div><div style="font-family:ui-monospace,monospace;font-size:11px;color:var(--muted);margin-top:8px;max-height:160px;overflow:auto">${l.map(esc).join("<br>")}</div><button class="btn sec block" id="errCopy" style="margin-top:10px">Copiar errores</button></div>`:""})()}
   <div class="note" style="text-align:center;margin:10px 0 20px">Mis Cuentas · hecha para ti</div>`;
@@ -983,9 +987,14 @@ function renderAjustes(){
   document.querySelectorAll("[data-cat]").forEach(r=>r.onclick=()=>openCat(cat(r.dataset.cat)));
   document.querySelectorAll("[data-rdel]").forEach(b=>b.onclick=()=>{S.rules.splice(+b.dataset.rdel,1);save();renderAjustes()});
   const backup=()=>JSON.stringify({...S,bank:{...S.bank,pem:"",sessionId:""}},null,1);
-  $("#exp1").onclick=()=>{try{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([backup()],{type:"application/json"}));a.download=`miscuentas-${todayISO()}.json`;document.body.appendChild(a);a.click();a.remove();toast("Copia descargada")}catch(e){toast("No se pudo descargar; usa Copiar texto")}};
+  const doRestore=async(text)=>{try{const d=JSON.parse(text);if(!d.txs)throw 0;if(await confirmBox(`¿Restaurar la copia? Tiene ${d.txs.length} movimientos y sustituye a los datos actuales.`,"Restaurar")){const keep={pem:S.bank.pem,sessionId:S.bank.sessionId};S=d;normalize();Object.assign(S.bank,keep);save();toast("Copia restaurada ✓");render()}}catch(err){toast("Eso no es una copia válida")}};
+  $("#expShare").onclick=async()=>{const data=backup(),name=`miscuentas-${todayISO()}.json`;
+    try{if(FS&&ShareP){const w=await FS.writeFile({path:name,data,directory:"CACHE",encoding:"utf8"});await ShareP.share({title:"Copia Mis Cuentas",text:"Copia de seguridad de Mis Cuentas",files:[w.uri]});return}}catch(e){if(String(e&&e.message).includes("cancel"))return}
+    try{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([data],{type:"application/json"}));a.download=name;document.body.appendChild(a);a.click();a.remove();toast("Copia generada")}catch(e){try{await navigator.clipboard.writeText(data);toast("Copiado al portapapeles")}catch(_){toast("No se pudo guardar")}}};
+  $("#exp1").onclick=()=>{try{const a=document.createElement("a");a.href=URL.createObjectURL(new Blob([backup()],{type:"application/json"}));a.download=`miscuentas-${todayISO()}.json`;document.body.appendChild(a);a.click();a.remove();toast("Copia descargada")}catch(e){toast("No se pudo descargar; usa Compartir")}};
   $("#exp2").onclick=async()=>{try{await navigator.clipboard.writeText(backup());toast("Copiado al portapapeles")}catch(e){toast("No se pudo copiar")}};
-  $("#imp").onchange=async e=>{const f=e.target.files[0];if(!f)return;try{const d=JSON.parse(await f.text());if(!d.txs)throw 0;if(await confirmBox(`¿Restaurar la copia? Tiene ${d.txs.length} movimientos y sustituye a los datos actuales.`,"Restaurar")){const keep={pem:S.bank.pem,sessionId:S.bank.sessionId};S=d;normalize();Object.assign(S.bank,keep);save();toast("Copia restaurada");render()}}catch(err){toast("Ese archivo no es una copia válida")}};
+  $("#imp").onchange=async e=>{const f=e.target.files[0];if(!f)return;doRestore(await f.text())};
+  $("#impText").onclick=()=>{openSheet(`<h3>Restaurar pegando texto</h3><div class="note" style="margin-bottom:8px">Pega aquí el texto de la copia (el que empieza por <b>{</b> y acaba en <b>}</b>).</div><textarea class="in" id="rtxt" rows="6" style="width:100%;font-family:ui-monospace,monospace;font-size:12px" placeholder="{ ... }"></textarea><button class="btn block" id="rtxtGo" style="margin-top:10px">Restaurar</button>`,el=>{setTimeout(()=>el.querySelector("#rtxt").focus(),200);el.querySelector("#rtxtGo").onclick=async()=>{const v=el.querySelector("#rtxt").value.trim();if(!v){toast("Pega el texto de la copia");return}closeSheet();await doRestore(v)}})};
   $("#wipe").onclick=async()=>{if(await confirmBox("¿Borrar todos los datos? No se puede deshacer.","Borrar todo")){S=freshState();save();toast("Datos borrados");go("home")}};
 }
 
