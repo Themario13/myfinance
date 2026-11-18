@@ -944,14 +944,20 @@ function renderAjustes(){
   <div class="card"><h2>Lo que he aprendido</h2>
     ${S.rules.length?S.rules.map((r,i)=>`<div class="row"><div class="mid"><div class="t">«${esc(r.key)}» → ${cat(r.cat).icon} ${esc(cat(r.cat).name)}</div></div><button class="btn sm sec" data-rdel="${i}">Olvidar</button></div>`).join(""):`<div class="note">Cuando cambies la categoría de un movimiento, recordaré el comercio para clasificarlo solo la próxima vez.</div>`}
   </div>
+  <div class="card"><h2>Actualizaciones</h2>
+    <div class="note" style="margin-bottom:10px">Versión actual: <b>v${APP_VER||"?"}</b>. Al instalar una versión nueva encima <b>no pierdes nada</b> (mismos datos, saldo, fijos, objetivos…).</div>
+    <div id="updBox"></div>
+    <button class="btn sec block" id="updBtn" style="margin-top:10px">Buscar actualización</button>
+  </div>
   <div class="card"><h2>Copia de seguridad</h2>
-    <div class="note" style="margin-bottom:10px">Tus datos se guardan solo en este móvil. Haz una copia de vez en cuando.</div>
+    <div class="note" style="margin-bottom:10px">Tus datos se guardan solo en este móvil. Haz una copia de vez en cuando. Aun así, antes de actualizar puedes descargar una copia por si acaso.</div>
     <div class="grid2"><button class="btn sec" id="exp1">Descargar copia</button><button class="btn sec" id="exp2">Copiar texto</button></div>
     <label class="btn sec block" style="margin-top:8px">Restaurar desde archivo<input type="file" id="imp" accept=".json,application/json" hidden></label>
     <button class="btn danger block" style="margin-top:8px" id="wipe">Borrar todos los datos</button>
   </div>
   ${(()=>{let l=[];try{l=JSON.parse(localStorage.getItem("miscuentas.errs")||"[]")}catch(_){}return l.length?`<div class="card"><h2>Diagnóstico <a id="errClr">Borrar</a></h2><div class="note">Si algo falla, copia esto y pásamelo:</div><div style="font-family:ui-monospace,monospace;font-size:11px;color:var(--muted);margin-top:8px;max-height:160px;overflow:auto">${l.map(esc).join("<br>")}</div><button class="btn sec block" id="errCopy" style="margin-top:10px">Copiar errores</button></div>`:""})()}
   <div class="note" style="text-align:center;margin:10px 0 20px">Mis Cuentas · hecha para ti</div>`;
+  {const ub=$("#updBtn");if(ub)ub.onclick=()=>checkUpdate(true);checkUpdate(false);}
   {const ec=$("#errCopy");if(ec)ec.onclick=async()=>{try{await navigator.clipboard.writeText(localStorage.getItem("miscuentas.errs")||"");toast("Copiado")}catch(e){toast("No se pudo copiar")}};const ex=$("#errClr");if(ex)ex.onclick=()=>{localStorage.removeItem("miscuentas.errs");renderAjustes()}}
   document.querySelectorAll("[data-go]").forEach(r=>r.onclick=()=>({nomina:()=>openFixed(nomina()||{type:"inc",cat:"nomina",name:"Nómina",day:28,auto:true,match:"nomina"}),balance:openBalance,cash:openCash,goal:()=>go("goals"),fijos:()=>go("fijos"),limits:openLimits})[r.dataset.go]());
   $("#reWiz").onclick=openWizard;
@@ -1447,6 +1453,23 @@ const isNative=!!(Cap&&Cap.isNativePlatform&&Cap.isNativePlatform());
 const plug=n=>isNative?(Cap.Plugins&&Cap.Plugins[n])||(Cap.registerPlugin&&Cap.registerPlugin(n)):null;
 const QuickAdd=plug("QuickAdd"),AppP=plug("App"),BrowserP=plug("Browser"),FS=plug("Filesystem"),ShareP=plug("Share");
 const REDIRECT_DEFAULT="__REDIRECT_URL__";
+const APP_VER=parseInt("__BUILD__")||0;                         // número de versión (lo sella GitHub al compilar)
+const REPO="Themario13/myfinance";
+async function openExt(url){try{if(BrowserP){await BrowserP.open({url});return}}catch(e){}try{window.open(url,"_system")}catch(e){}location.href=url}
+/** Mira en GitHub si hay una versión más nueva y deja descargarla (instalar encima no borra datos). */
+async function checkUpdate(manual){
+  const box=$("#updBox");if(box)box.innerHTML='<span class="spin"></span> Buscando…';
+  try{
+    const r=await fetch(`https://api.github.com/repos/${REPO}/releases/latest`,{headers:{Accept:"application/vnd.github+json"}});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const d=await r.json();const latest=parseInt(String(d.tag_name||"").replace(/\D/g,""))||0;
+    const apk=(d.assets||[]).find(a=>/\.apk$/i.test(a.name));
+    if(!box)return;
+    if(latest>APP_VER&&apk){box.innerHTML=`<div class="alert w" style="margin:0"><span class="e1">⬆️</span><div><b>Hay una versión nueva (v${latest})</b><div class="s" style="margin-top:2px">Tienes la v${APP_VER||"?"}. Descárgala e instálala encima: no pierdes nada.</div><button class="btn sm" id="updGet" style="margin-top:8px">Descargar v${latest}</button></div></div>`;
+      $("#updGet").onclick=()=>{openExt(apk.browser_download_url);toast("Abriendo la descarga…")};}
+    else box.innerHTML=`<div class="note">✅ Estás en la última versión${APP_VER?` (v${APP_VER})`:""}.</div>`;
+  }catch(e){if(box)box.innerHTML=`<div class="note">No se pudo comprobar ahora${manual?": "+esc(e.message):""}. <a class="link" id="updRetry">Reintentar</a></div>`;const rt=$("#updRetry");if(rt)rt.onclick=()=>checkUpdate(true)}
+}
 let pushT;
 const mondayISO=()=>{const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));return iso(d)};
 /** Lo gastado esta semana (día a día, neto de devoluciones) y cómo van tus límites. */

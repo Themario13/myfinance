@@ -33,6 +33,9 @@ jobs:
           sed -i "s#__REDIRECT_URL__#${URL}#g" www/index.html
           echo "Redirect URL: $URL"
 
+      - name: Sellar el número de versión en la app
+        run: sed -i "s/__BUILD__/${{ github.run_number }}/g" www/index.html
+
       - name: Copiar la web a Android
         run: npx cap sync android
 
