@@ -1180,6 +1180,7 @@ function openFixed(f){
    <label class="field"><span>Día del mes</span><input class="in num" id="fDay" inputmode="numeric" value="${f.day||1}"></label></div>
    <div class="grid2"><label class="field"><span>Frecuencia</span><select class="in" id="fFreq"><option value="m">Cada mes</option><option value="y" ${f.freq==="y"?"selected":""}>Una vez al año</option></select></label>
    <label class="field" id="fMonthW"><span>Mes</span><select class="in" id="fMonth">${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${+(f.month||1)===i+1?"selected":""}>${monthName("2000-"+pad(i+1)).replace(" de 2000","")}</option>`).join("")}</select></label></div>
+   <label class="field"><span>¿Desde qué mes cuenta? <span style="font-weight:500">(para lo que te deben / cuándo empezó)</span></span><input class="in" type="month" id="fSince" value="${(f.since||todayISO()).slice(0,7)}" max="${todayISO().slice(0,7)}"></label>
    <label class="field"><span>Categoría</span><select class="in" id="fCat"></select></label>
    <div class="set-row" style="border:0;padding-top:0"><div class="mid"><b>Anotar solo</b><div class="s">Se anota automáticamente el día que toca. Si llega el movimiento real del banco, se asocia y no se duplica. Si lo dejas apagado, lo marcas tú con «Pagar» / «Cobrado».</div></div><button class="sw ${f.auto===true?"on":""}" id="fAuto"></button></div>
    <div class="set-row" style="border:0;padding-top:0"><div class="mid"><b>💵 En efectivo</b><div class="s">Entra o sale de tu efectivo en casa, no del banco (ej: el garaje alquilado o el crossfit en mano)</div></div><button class="sw ${f.cash?"on":""}" id="fCash"></button></div>
@@ -1198,7 +1199,8 @@ function openFixed(f){
     if(!f.amount)setTimeout(()=>el.querySelector("#fAmt").focus(),300);
     el.querySelector("#fSave").onclick=()=>{
       const name=el.querySelector("#fName").value.trim();if(!name){toast("Ponle un nombre");return}
-      const data={name,type,auto,ext,cash:paycash,owe:type==="inc"&&owe,amount:parseAmt(el.querySelector("#fAmt").value),day:Math.min(31,Math.max(1,parseInt(el.querySelector("#fDay").value)||1)),freq:el.querySelector("#fFreq").value,month:+el.querySelector("#fMonth").value,cat:el.querySelector("#fCat").value,match:el.querySelector("#fMatch").value.trim()};
+      const sinceM=el.querySelector("#fSince").value;
+      const data={name,type,auto,ext,cash:paycash,owe:type==="inc"&&owe,since:(sinceM||todayISO().slice(0,7))+"-01",amount:parseAmt(el.querySelector("#fAmt").value),day:Math.min(31,Math.max(1,parseInt(el.querySelector("#fDay").value)||1)),freq:el.querySelector("#fFreq").value,month:+el.querySelector("#fMonth").value,cat:el.querySelector("#fCat").value,match:el.querySelector("#fMatch").value.trim()};
       if(isNew)S.fixed.push({id:f.id||uid(),since:todayISO(),...data});else Object.assign(f,data);
       relinkFixed();applyAutoLimits();save();autoFixed();closeSheet();render();
     };
