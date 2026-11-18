@@ -382,12 +382,24 @@ const refundTarget=t=>t.refundOf?S.txs.find(x=>x.id===t.refundOf):null;
 const loanRepay=t=>{const x=refundTarget(t);return x&&x.loan?x:null}; // devolución de un préstamo (no es ingreso del mes)
 /** Préstamos aún no devueltos del todo, con lo que te queda por cobrar. */
 function openLoans(){return S.txs.filter(isLoan).map(t=>({tx:t,who:t.who||"Alguien",left:Math.round((t.amount-refundsOf(t.id))*100)/100})).filter(l=>l.left>0.005).sort((a,b)=>b.tx.date.localeCompare(a.tx.date))}
+/** Ingresos fijos marcados «me lo pueden deber» que no has cobrado algún mes: lo que te deben, acumulado por meses. */
+function receivables(){
+  const out=[],cur=curYM();
+  for(const f of S.fixed){
+    if(f.type!=="inc"||!f.owe||(f.freq||"m")!=="m"||!(+f.amount))continue;
+    const start=f.since?ymOf(f.since):addMonths(cur,-11);
+    const months=[];let m=start<addMonths(cur,-11)?addMonths(cur,-11):start,guard=0;
+    while(m<=cur&&guard++<60){const left=Math.round(((+f.amount)-fixedSum(f,m))*100)/100;if(left>0.005)months.push({ym:m,left});m=addMonths(m,1)}
+    if(months.length){out.push({f,months,total:Math.round(months.reduce((a,x)=>a+x.left,0)*100)/100})}
+  }
+  return out;
+}
 /** Devolución de un gasto de un objetivo: vuelve a su hucha, no toca el mes. */
 const goalRefund=t=>{const x=refundTarget(t);return x&&x.goal?x.goal:null};
 const refundsOf=id=>S.txs.filter(t=>t.refundOf===id).reduce((a,t)=>a+t.amount,0);
 /** exp = gasto neto (descontando lo que te devuelven los amigos); los traspasos a ahorro no son gasto. */
-function sums(ym){let inc=0,gross=0,ref=0,sav=0,gs=0;for(const t of txOfMonth(ym)){if(t.transfer||t.cajero||isLoan(t)||loanRepay(t))continue;if(goalRefund(t)){gs-=t.amount;continue}if(isRefund(t))ref+=t.amount;else if(t.type==="inc")inc+=t.amount;else if(t.goal)gs+=t.amount;else if(isSaving(t))sav+=t.amount;else gross+=t.amount}const exp=gross-ref;return{inc,exp,gross,ref,sav,gs,bal:inc-exp}}
-function byCat(ym,varOnly){const m={};let ref=0;for(const t of txOfMonth(ym)){if(t.transfer||t.cajero||isLoan(t)||loanRepay(t))continue;if(varOnly&&t.fixedId)continue;if(goalRefund(t))continue;if(isRefund(t)&&cat(t.cat).type==="exp")m[t.cat]=(m[t.cat]||0)-t.amount;else if(isRefund(t))ref+=t.amount;else if(t.type==="exp"&&!isSaving(t)&&!t.goal)m[t.cat]=(m[t.cat]||0)+t.amount}
+function sums(ym){let inc=0,gross=0,ref=0,sav=0,gs=0;for(const t of txOfMonth(ym)){if(t.transfer||t.cajero||t.settle||isLoan(t)||loanRepay(t))continue;if(goalRefund(t)){gs-=t.amount;continue}if(isRefund(t))ref+=t.amount;else if(t.type==="inc")inc+=t.amount;else if(t.goal)gs+=t.amount;else if(isSaving(t))sav+=t.amount;else gross+=t.amount}const exp=gross-ref;return{inc,exp,gross,ref,sav,gs,bal:inc-exp}}
+function byCat(ym,varOnly){const m={};let ref=0;for(const t of txOfMonth(ym)){if(t.transfer||t.cajero||t.settle||isLoan(t)||loanRepay(t))continue;if(varOnly&&t.fixedId)continue;if(goalRefund(t))continue;if(isRefund(t)&&cat(t.cat).type==="exp")m[t.cat]=(m[t.cat]||0)-t.amount;else if(isRefund(t))ref+=t.amount;else if(t.type==="exp"&&!isSaving(t)&&!t.goal)m[t.cat]=(m[t.cat]||0)+t.amount}
   // las devoluciones de amigos se descuentan de «comer fuera y ocio» (casi siempre son cenas a medias)
   if(ref&&m.ocio){const d=Math.min(m.ocio,ref);m.ocio-=d;ref-=d;if(m.ocio<=0.005)delete m.ocio}
   return Object.entries(m).filter(x=>x[1]>0.005).sort((a,b)=>b[1]-a[1])}
@@ -423,7 +435,7 @@ function histMonths(){const cur=curYM();return[...new Set(S.txs.filter(t=>t.src!
 function catStats(){
   const ms=histMonths(),sum={},gross={},cnt={},merch={};
   for(const m of ms)for(const t of txOfMonth(m)){
-    if(t.fixedId||t.goal||t.amount>300||isLoan(t)||loanRepay(t))continue;
+    if(t.fixedId||t.goal||t.amount>300||t.settle||isLoan(t)||loanRepay(t))continue;
     if(t.type==="exp"&&!isSaving(t)){sum[t.cat]=(sum[t.cat]||0)+t.amount;gross[t.cat]=(gross[t.cat]||0)+t.amount;cnt[t.cat]=(cnt[t.cat]||0)+1;
       const k=prettify(t.note||"");if(k){const mk=t.cat+"|"+k;merch[mk]=(merch[mk]||0)+t.amount}}
     else if(isRefund(t)){const c=cat(t.cat).type==="exp"?t.cat:"ocio";sum[c]=(sum[c]||0)-t.amount}
@@ -570,12 +582,12 @@ function totalMoney(){
   const accs=S.bank.accounts||[];
   if(S.bank.sessionId&&accs.some(a=>a.balance!=null)){
     let b=accs.reduce((a,x)=>a+(+x.balance||0),0);
-    for(const t of S.txs){if(t.src==="bank"||t.ext||t.cash||t.bankId||t.date<(S.bank.balanceDate||"9999"))continue;if(t.transfer==="toCash")b-=t.amount;else if(t.transfer==="toBank")b+=t.amount;else b+=t.type==="inc"?t.amount:-t.amount}
+    for(const t of S.txs){if(t.src==="bank"||t.ext||t.cash||t.settle||t.bankId||t.date<(S.bank.balanceDate||"9999"))continue;if(t.transfer==="toCash")b-=t.amount;else if(t.transfer==="toBank")b+=t.amount;else b+=t.type==="inc"?t.amount:-t.amount}
     return{v:b,src:"bank"};
   }
   const B=S.settings.balance;if(!B)return null;
   let b=+B.amount;
-  for(const t of S.txs){if(t.ext||t.cash)continue;const when=t.created!==undefined?t.created:(t.ts||0);if(!(when>B.ts&&t.date>=B.date))continue;if(t.transfer==="toCash")b-=t.amount;else if(t.transfer==="toBank")b+=t.amount;else b+=t.type==="inc"?t.amount:-t.amount}
+  for(const t of S.txs){if(t.ext||t.cash||t.settle)continue;const when=t.created!==undefined?t.created:(t.ts||0);if(!(when>B.ts&&t.date>=B.date))continue;if(t.transfer==="toCash")b-=t.amount;else if(t.transfer==="toBank")b+=t.amount;else b+=t.type==="inc"?t.amount:-t.amount}
   return{v:b,src:"manual",since:B.ts};
 }
 /** Anota solos los fijos cuyo día ya ha llegado (si no hay banco conectado). */
@@ -721,10 +733,26 @@ function renderHome(){
     ${L.map(l=>`<div style="padding:4px 0 10px;border-bottom:1px solid var(--line)"><div class="row"><div class="ic" style="background:var(--soft)">🤝</div><div class="mid tap" data-tx="${l.tx.id}"><div class="t">${esc(l.who)}</div><div class="s">Prestaste ${esc(money(l.tx.amount))} · ${esc(dayLabel(l.tx.date))}${l.tx.cash?" · 💵":""}${l.left<l.tx.amount?` · ya ${esc(money(l.tx.amount-l.left))}`:""}</div></div><div class="amt num exp">${esc(money(l.left))}</div></div>
       <div class="row" style="padding:2px 0 0;align-items:center"><div class="s" style="flex:1">Te debe ${esc(money(l.left))}</div><button class="btn sm sec" data-loanpart="${l.tx.id}" style="margin-right:6px">Parte…</button><button class="btn sm" data-loanpaid="${l.tx.id}">Cobrado</button></div></div>`).join("")}
     </div>`})()}
+  ${(()=>{const R=safe("cobrar",receivables,[]);if(!R.length)return"";const tot=R.reduce((a,r)=>a+r.total,0);
+    return `<div class="card"><h2>⏳ Pendiente de cobrar <span class="muted" style="font-weight:600;font-size:13px">· te deben ${esc(money(tot))}</span></h2>
+    ${R.map(r=>`<div style="padding:4px 0 10px;border-bottom:1px solid var(--line)"><div class="row"><div class="ic" style="background:var(--soft)">⏳</div><div class="mid tap" data-fx="${r.f.id}"><div class="t">${esc(r.f.name)}</div><div class="s">${r.months.length} ${r.months.length>1?"meses":"mes"} sin cobrar${r.f.cash?" · 💵":""}</div></div><div class="amt num exp">${esc(money(r.total))}</div></div>
+      <div class="chips" style="flex-wrap:wrap;margin-top:6px">${r.months.map(mo=>`<button class="chip" data-collect="${r.f.id}|${mo.ym}">${esc(monthName(mo.ym,true).replace(".",""))} · ${esc(money0(mo.left))}</button>`).join("")}</div>
+      <div class="note" style="margin-top:5px">Toca un mes para marcarlo cobrado o como ya saldado.</div></div>`).join("")}
+    </div>`})()}
   <button class="btn sec block" data-act="stats" style="margin-bottom:12px">📊 ¿En qué se me va el dinero?</button>`;
+  const collectMonth=(f,ym,settle)=>{const left=Math.round(((+f.amount)-fixedSum(f,ym))*100)/100;if(left<=0.005)return;const day=Math.min(+f.day||1,daysIn(ym));S.txs.push({id:uid(),type:"inc",amount:left,cat:f.cat,note:f.name,date:`${ym}-${pad(day)}`,fixedId:f.id,src:"manual",ts:Date.now(),created:Date.now(),cash:!settle&&f.cash||undefined,settle:settle||undefined});save();render()};
   const repayLoan=(loan,amount)=>{S.txs.push({id:uid(),type:"inc",amount:Math.round(amount*100)/100,cat:"devol",note:"Te devuelve "+(loan.who||"alguien"),date:todayISO(),src:"manual",ts:Date.now(),created:Date.now(),refundOf:loan.id,cash:loan.cash||undefined});save();render()};
   $("#main").querySelectorAll("[data-loanpaid]").forEach(b=>b.onclick=()=>{const l=S.txs.find(x=>x.id===b.dataset.loanpaid);const left=Math.round((l.amount-refundsOf(l.id))*100)/100;if(left>0.005){repayLoan(l,left);toast(`${l.who||"Te"} lo ha devuelto ✓`)}});
   $("#main").querySelectorAll("[data-loanpart]").forEach(b=>b.onclick=async()=>{const l=S.txs.find(x=>x.id===b.dataset.loanpart);const left=Math.round((l.amount-refundsOf(l.id))*100)/100;const a=await amountBox(`¿Cuánto te ha devuelto ${l.who||"tu amigo"}?`,left);if(a>0){repayLoan(l,Math.min(a,left));toast("Devolución anotada ✓")}});
+  $("#main").querySelectorAll("[data-collect]").forEach(b=>b.onclick=()=>{const [id,ym]=b.dataset.collect.split("|");const f=S.fixed.find(x=>x.id===id);if(!f)return;const mn=monthName(ym).replace(" de "," ");
+    openSheet(`<h3>${esc(f.name)} · ${esc(mn)}</h3><p style="margin:0 0 14px">¿Qué pasó con este mes?</p>
+      <button class="btn block" id="colPay">💰 Me lo han pagado${f.cash?" (en efectivo)":""}</button>
+      <div class="note" style="margin:6px 2px 14px">Entra en tu ${f.cash?"efectivo":"saldo"} y deja de contar como deuda.</div>
+      <button class="btn sec block" id="colSettle">✓ Ya estaba cobrado / no me lo deben</button>
+      <div class="note" style="margin:6px 2px 0">Lo quita de la lista sin tocar tu dinero.</div>`,el=>{
+      el.querySelector("#colPay").onclick=()=>{collectMonth(f,ym,false);closeSheet();toast("Cobrado ✓")};
+      el.querySelector("#colSettle").onclick=()=>{collectMonth(f,ym,true);closeSheet();toast("Saldado ✓")};
+    })});
   bindRows($("#main"));
   $("#main").querySelectorAll("[data-act]").forEach(a=>a.onclick=e=>{e.stopPropagation();const x=a.dataset.act;
     if(x==="sync")bankSync(true);else if(x==="csv")pickCSV();else if(x==="tips")openTips();else if(x==="stats")openStats();else if(x==="goal"||x==="goals")go("goals");else if(x==="closeok"){S.settings.closedSeen=addMonths(curYM(),-1);save();render()}
@@ -844,11 +872,11 @@ function renderFijos(){
     const col=paid?"var(--mint)":inc?"var(--mint)":c.color;
     return `<div style="padding:4px 0 10px;border-bottom:1px solid var(--line)">
       <div class="row" style="padding:6px 0"><div class="ic" style="background:${c.color}22">${c.icon}</div>
-      <div class="mid tap" data-fx="${f.id}" style="cursor:pointer"><div class="t">${esc(f.name)}${paid?' <span class="tag auto">pagado ✓</span>':""}</div><div class="s">${(f.freq||"m")==="m"?"Cada mes":"Cada año ("+monthName("2000-"+pad(f.month||1),true).replace(".","")+")"} · día ${f.day}${f.cash?" · 💵 en efectivo":f.ext?" · otra cuenta":""}${c.saving?" · va a tu ahorro":""}</div></div>
+      <div class="mid tap" data-fx="${f.id}" style="cursor:pointer"><div class="t">${esc(f.name)}${paid?` <span class="tag auto">${inc?"cobrado":"pagado"} ✓</span>`:""}</div><div class="s">${(f.freq||"m")==="m"?"Cada mes":"Cada año ("+monthName("2000-"+pad(f.month||1),true).replace(".","")+")"} · día ${f.day}${f.cash?" · 💵 en efectivo":f.ext?" · otra cuenta":""}${c.saving?" · va a tu ahorro":""}</div></div>
       <div class="amt num ${inc?"inc":""}">${amt?esc(money(amt)):"—"}</div></div>
-      ${amt&&!inc?`<div class="bar thin"><i style="width:${pct}%;background:${col}"></i></div>
-      <div class="row" style="padding:6px 0 0;align-items:center"><div class="s" style="flex:1">${f.auto?`⚙️ Se anota solo · ${done>0?`puesto ${esc(money(done))}`:"pendiente este mes"}`:done>0?`Pagado ${esc(money(done))} de ${esc(money(amt))}`:"Sin pagar este mes"}</div>
-        ${f.auto?"":paid?`<button class="btn sm sec" data-unpay="${f.id}">Deshacer</button>`:`<button class="btn sm sec" data-paypart="${f.id}" style="margin-right:6px">Parte…</button><button class="btn sm" data-pay="${f.id}">Pagar${done>0?" resto":""}</button>`}</div>`:""}
+      ${amt?`<div class="bar thin"><i style="width:${pct}%;background:${col}"></i></div>
+      <div class="row" style="padding:6px 0 0;align-items:center"><div class="s" style="flex:1">${f.auto?`⚙️ Se anota solo · ${done>0?`puesto ${esc(money(done))}`:"pendiente este mes"}`:done>0?`${inc?"Cobrado":"Pagado"} ${esc(money(done))} de ${esc(money(amt))}`:inc?"Sin cobrar este mes":"Sin pagar este mes"}</div>
+        ${f.auto?"":paid?`<button class="btn sm sec" data-unpay="${f.id}">Deshacer</button>`:`<button class="btn sm sec" data-paypart="${f.id}" style="margin-right:6px">Parte…</button><button class="btn sm" data-pay="${f.id}">${inc?"Cobrado":"Pagar"}${done>0?" resto":""}</button>`}</div>`:""}
     </div>`};
   $("#main").innerHTML=`
   <div class="card"><h2>Lo que pagas cada mes</h2>
@@ -863,10 +891,10 @@ function renderFijos(){
   $("#addFx").onclick=()=>openFixed({});
   document.querySelectorAll("[data-fx]").forEach(b=>b.onclick=()=>openFixed(S.fixed.find(f=>f.id===b.dataset.fx)));
   const payFixed=(f,amount)=>{const day=Math.min(+f.day||1,daysIn(month));S.txs.push({id:uid(),type:f.type||"exp",amount:Math.round(amount*100)/100,cat:f.cat,note:f.name,date:`${month}-${pad(day)}`,fixedId:f.id,src:"manual",ts:Date.now(),created:Date.now(),ext:!!f.ext||undefined,cash:!!f.cash||undefined});save();renderFijos()};
-  document.querySelectorAll("[data-pay]").forEach(b=>b.onclick=()=>{const f=S.fixed.find(x=>x.id===b.dataset.pay);if(!(+f.amount)){openFixed(f);toast("Primero pon el importe");return}
-    const left=Math.round(((+f.amount)-fixedSum(f,month))*100)/100;if(left<=0){toast("Ya está pagado");return}payFixed(f,left);toast("Pagado ✓")});
-  document.querySelectorAll("[data-paypart]").forEach(b=>b.onclick=async()=>{const f=S.fixed.find(x=>x.id===b.dataset.paypart);if(!(+f.amount)){openFixed(f);toast("Primero pon el importe");return}
-    const left=Math.round(((+f.amount)-fixedSum(f,month))*100)/100;const a=await amountBox(`¿Cuánto has pagado de «${f.name}»?`,left>0?left:+f.amount);if(a>0){payFixed(f,a);toast("Anotado ✓")}});
+  document.querySelectorAll("[data-pay]").forEach(b=>b.onclick=()=>{const f=S.fixed.find(x=>x.id===b.dataset.pay);const inc=f.type==="inc";if(!(+f.amount)){openFixed(f);toast("Primero pon el importe");return}
+    const left=Math.round(((+f.amount)-fixedSum(f,month))*100)/100;if(left<=0){toast(inc?"Ya está cobrado":"Ya está pagado");return}payFixed(f,left);toast(inc?"Cobrado ✓":"Pagado ✓")});
+  document.querySelectorAll("[data-paypart]").forEach(b=>b.onclick=async()=>{const f=S.fixed.find(x=>x.id===b.dataset.paypart);const inc=f.type==="inc";if(!(+f.amount)){openFixed(f);toast("Primero pon el importe");return}
+    const left=Math.round(((+f.amount)-fixedSum(f,month))*100)/100;const a=await amountBox(inc?`¿Cuánto has cobrado de «${f.name}»?`:`¿Cuánto has pagado de «${f.name}»?`,left>0?left:+f.amount);if(a>0){payFixed(f,a);toast("Anotado ✓")}});
   document.querySelectorAll("[data-unpay]").forEach(b=>b.onclick=async()=>{const f=S.fixed.find(x=>x.id===b.dataset.unpay);const mine=S.txs.filter(t=>t.fixedId===f.id&&ymOf(t.date)===month&&(t.src==="manual"||t.src==="quick"));
     if(!mine.length){toast("Este pago vino del banco, bórralo desde Movimientos");return}
     if(await confirmBox(`¿Deshacer el pago de «${f.name}» de este mes?`,"Deshacer")){const ids=new Set(mine.map(t=>t.id));S.txs=S.txs.filter(t=>!ids.has(t.id));save();renderFijos()}});
@@ -1138,8 +1166,9 @@ function openFixed(f){
    <div class="grid2"><label class="field"><span>Frecuencia</span><select class="in" id="fFreq"><option value="m">Cada mes</option><option value="y" ${f.freq==="y"?"selected":""}>Una vez al año</option></select></label>
    <label class="field" id="fMonthW"><span>Mes</span><select class="in" id="fMonth">${Array.from({length:12},(_,i)=>`<option value="${i+1}" ${+(f.month||1)===i+1?"selected":""}>${monthName("2000-"+pad(i+1)).replace(" de 2000","")}</option>`).join("")}</select></label></div>
    <label class="field"><span>Categoría</span><select class="in" id="fCat"></select></label>
-   <div class="set-row" style="border:0;padding-top:0"><div class="mid"><b>Anotar solo</b><div class="s">Se apunta automáticamente el día que toca. Si llega el cargo real, se asocia y no se duplica. Si lo dejas apagado, lo marcas tú con «Pagar».</div></div><button class="sw ${f.auto===true?"on":""}" id="fAuto"></button></div>
-   <div class="set-row" style="border:0;padding-top:0"><div class="mid"><b>💵 Lo pago en efectivo</b><div class="s">Al pagarlo sale de tu efectivo en casa, no del banco (ej: el crossfit en mano)</div></div><button class="sw ${f.cash?"on":""}" id="fCash"></button></div>
+   <div class="set-row" style="border:0;padding-top:0"><div class="mid"><b>Anotar solo</b><div class="s">Se anota automáticamente el día que toca. Si llega el movimiento real del banco, se asocia y no se duplica. Si lo dejas apagado, lo marcas tú con «Pagar» / «Cobrado».</div></div><button class="sw ${f.auto===true?"on":""}" id="fAuto"></button></div>
+   <div class="set-row" style="border:0;padding-top:0"><div class="mid"><b>💵 En efectivo</b><div class="s">Entra o sale de tu efectivo en casa, no del banco (ej: el garaje alquilado o el crossfit en mano)</div></div><button class="sw ${f.cash?"on":""}" id="fCash"></button></div>
+   <div class="set-row" id="fOweRow" style="border:0;padding-top:0;display:${type==="inc"?"":"none"}"><div class="mid"><b>🤝 Llevar lo que me deben</b><div class="s">Si un mes no lo cobras, se acumula en «Pendiente de cobrar» (ej: el alquiler del garaje que te deben)</div></div><button class="sw ${f.owe?"on":""}" id="fOwe"></button></div>
    <div class="set-row" style="border:0;padding-top:0"><div class="mid"><b>Desde otra cuenta</b><div class="s">Cuenta en tu plan, pero no resta del saldo de esta cuenta</div></div><button class="sw ${f.ext?"on":""}" id="fExt"></button></div>
    <label class="field"><span>Texto en el banco (opcional)</span><input class="in" id="fMatch" value="${esc(f.match||"")}" placeholder="Ej: hipoteca, iberdrola…" autocapitalize="off"></label>
    <button class="btn block" id="fSave">Guardar</button>
@@ -1147,13 +1176,14 @@ function openFixed(f){
     let auto=f.auto===true;const sw=el.querySelector("#fAuto");sw.onclick=()=>{auto=!auto;sw.classList.toggle("on",auto)};
     let ext=!!f.ext;const sx=el.querySelector("#fExt");sx.onclick=()=>{ext=!ext;sx.classList.toggle("on",ext)};
     let paycash=!!f.cash;const scx=el.querySelector("#fCash");scx.onclick=()=>{paycash=!paycash;scx.classList.toggle("on",paycash);if(paycash){ext=false;sx.classList.remove("on")}};
+    let owe=!!f.owe;const sow=el.querySelector("#fOwe");sow.onclick=()=>{owe=!owe;sow.classList.toggle("on",owe)};
     const fill=()=>{el.querySelector("#fCat").innerHTML=catsOf(type).map(c=>`<option value="${c.id}" ${f.cat===c.id?"selected":""}>${c.icon} ${esc(c.name)}</option>`).join("")};fill();
     const fm=()=>el.querySelector("#fMonthW").style.visibility=el.querySelector("#fFreq").value==="y"?"visible":"hidden";fm();el.querySelector("#fFreq").onchange=fm;
-    el.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{type=b.dataset.t;el.querySelectorAll(".seg button").forEach(x=>x.classList.toggle("on",x===b));fill()});
+    el.querySelectorAll(".seg button").forEach(b=>b.onclick=()=>{type=b.dataset.t;el.querySelectorAll(".seg button").forEach(x=>x.classList.toggle("on",x===b));fill();el.querySelector("#fOweRow").style.display=type==="inc"?"":"none"});
     if(!f.amount)setTimeout(()=>el.querySelector("#fAmt").focus(),300);
     el.querySelector("#fSave").onclick=()=>{
       const name=el.querySelector("#fName").value.trim();if(!name){toast("Ponle un nombre");return}
-      const data={name,type,auto,ext,cash:paycash,amount:parseAmt(el.querySelector("#fAmt").value),day:Math.min(31,Math.max(1,parseInt(el.querySelector("#fDay").value)||1)),freq:el.querySelector("#fFreq").value,month:+el.querySelector("#fMonth").value,cat:el.querySelector("#fCat").value,match:el.querySelector("#fMatch").value.trim()};
+      const data={name,type,auto,ext,cash:paycash,owe:type==="inc"&&owe,amount:parseAmt(el.querySelector("#fAmt").value),day:Math.min(31,Math.max(1,parseInt(el.querySelector("#fDay").value)||1)),freq:el.querySelector("#fFreq").value,month:+el.querySelector("#fMonth").value,cat:el.querySelector("#fCat").value,match:el.querySelector("#fMatch").value.trim()};
       if(isNew)S.fixed.push({id:f.id||uid(),since:todayISO(),...data});else Object.assign(f,data);
       relinkFixed();applyAutoLimits();save();autoFixed();closeSheet();render();
     };
