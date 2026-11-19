@@ -725,6 +725,7 @@ function renderHome(){
       <div class="pill"><small>Gastos${P.ref?" netos":""}</small><b class="num exp">${esc(money0(P.exp))}</b></div>
       <div class="pill"><small>${goal?"Ahorras este mes":"Fijos pend."}</small><b class="num">${goal?esc(money0(past?P.inc-P.exp:Math.max(0,P.savedProj))):esc(money0(P.fixPending))}</b></div>
     </div>
+    ${isCur&&goal&&P.canSpend>0?`<div class="note" style="margin-top:10px">💚 Vas por debajo del presupuesto: lo que no gastes de los ${esc(money0(P.canSpend))} que te quedan se suma a tu ahorro. Si sigues así, ahorrarías <b class="inc">${esc(money0(goal+P.canSpend))}</b> este mes (${esc(money0(goal))} del objetivo + ${esc(money0(P.canSpend))} de más).</div>`:""}
   </div>
   ${isCur?safe("cierre",closingCard,""):""}
   ${al.length?`<div class="card"><h2>Avisos</h2>${al.map(a=>`<div class="alert ${a[0]}"><span class="e1">${a[1]}</span><div>${a[2]}</div></div>`).join("")}</div>`:""}
