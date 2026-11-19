@@ -497,7 +497,7 @@ function tips(){
     const diff=a-lim,tk=st.ticket[c.id]||0,n=tk?Math.max(1,Math.round(diff/tk)):0,nn=NOUN[c.id]||["gasto","gastos"];
     const top=Object.entries(st.merch).filter(([k])=>k.startsWith(c.id+"|")).sort((x,y)=>y[1]-x[1]).slice(0,3).map(([k,v])=>`${esc(k.split("|")[1])} (${money0(v/months)}/mes)`);
     out.push({save:diff,icon:c.icon,title:`${c.name}: de ${money0(a)} a ${money0(lim)} al mes`,
-      text:`${n?`${n===1?"Es <b>1 "+nn[0]:"Son unas <b>"+n+" "+nn[1]} menos</b> al mes (de media te gastas ${money0(tk)} cada vez). `:""}${top.length?`Donde más se va: ${top.join(", ")}.`:""}${c.id==="ocio"?" Truco: pon un tope por salida y paga con Bizum solo tu parte, así no adelantas dinero.":""}${c.id==="transporte"?" Llenar el depósito en gasolineras low cost (Plenoil, Ballenoil, Petroprix) suele ahorrar 10-15 céntimos por litro.":""}`});
+      text:`${n?`${n===1?"Es <b>1 "+nn[0]:"Son unas <b>"+n+" "+nn[1]} menos</b> al mes (de media te gastas ${money0(tk)} cada vez). `:""}${top.length?`Donde más se va: ${top.join(", ")}.`:""}${c.id==="ocio"?" Truco: pon un tope por salida y paga con Bizum solo tu parte, así no adelantas dinero.":""}`});
   }
   // suscripciones y herramientas que se repiten
   const subs=Object.entries(st.merch).filter(([k])=>/^(tools|subs)\|/.test(k)).map(([k,v])=>[k.split("|")[1],v/months]).filter(x=>x[1]>=3).sort((a,b)=>b[1]-a[1]);
@@ -514,6 +514,16 @@ function tips(){
   // gastos grandes recientes
   const big=S.txs.filter(t=>t.type==="exp"&&!t.fixedId&&!t.goal&&!isSaving(t)&&t.amount>=100&&Date.now()-new Date(t.date).getTime()<45*864e5).sort((a,b)=>b.amount-a.amount).slice(0,3);
   if(big.length)out.push({save:0,icon:"💸",title:"Gastos grandes del último mes y medio",text:big.map(t=>`${esc(t.note||cat(t.cat).name)} ${money0(t.amount)} (${new Date(t.date).toLocaleDateString("es-ES",{day:"numeric",month:"short"})})`).join(" · ")+". Antes de un gasto de más de 100 €, espera 48 horas: muchas veces se te pasan las ganas."});
+  // gasolina: a cuánto echas de media y cuánto ahorrarías en low cost (con tus litros reales)
+  {const F=fuelTxs();
+   if(F.length>=2){
+     const totE=F.reduce((a,t)=>a+t.amount,0),totL=F.reduce((a,t)=>a+(t.liters||0),0),avg=totL?totE/totL:0;
+     const mn=Math.max(1,new Set(F.map(t=>ymOf(t.date))).size),lMonth=totL/mn,saveMonth=lMonth*0.12;
+     const last=F[F.length-1].ppl;
+     const trend=last>avg+0.05?` Ahora mismo estás echando a ${last.toFixed(3).replace(".",",")} €/L, por encima de tu media.`:"";
+     out.push({save:saveMonth>=5?saveMonth:0,icon:"⛽",title:`Gasolina: echas de media a ${avg.toFixed(3).replace(".",",")} €/L`,
+       text:`Repostas unos ${Math.round(lMonth)} L al mes.${trend} En gasolineras low cost (Plenoil, Ballenoil, Petroprix) sueles ahorrar 10-15 cts/L: con tu consumo serían <b>unos ${money0(saveMonth)} al mes</b>.`});
+   }}
   out.sort((a,b)=>(b.now?1:0)-(a.now?1:0)||b.save-a.save);
   return out;
 }
