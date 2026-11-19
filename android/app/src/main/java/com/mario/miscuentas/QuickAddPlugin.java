@@ -58,6 +58,8 @@ public class QuickAddPlugin extends Plugin {
                 .putString("weekSpent", String.valueOf(call.getDouble("weekSpent", 0.0)))
                 .putString("weekCats", call.getString("weekCats", ""))
                 .putString("cats", call.getString("cats", ""))
+                .putString("reminders", call.getString("reminders", ""))
+                .putString("remindMonth", call.getString("remindMonth", ""))
                 .apply();
         QuickStore.scheduleWeekly(c);
         QuickStore.scheduleDaily(c);

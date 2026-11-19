@@ -31,6 +31,7 @@ public class QuickStore {
     static final int NOTIF_ID = 4242;
     static final int ALERT_ID = 4243;
     static final int WEEKLY_ID = 4244;
+    static final int REMIND_ID = 4245;
     static final String CHANNEL_WEEKLY = "weekly_v1";
     static final String KEY_TEXT = "quick_text";
     static final String ACTION_ADD = "com.mario.miscuentas.QUICK_ADD";
@@ -301,6 +302,38 @@ public class QuickStore {
 
     static void hideNotification(Context c) {
         NotificationManagerCompat.from(c).cancel(NOTIF_ID);
+    }
+
+    /** El penúltimo/último día del mes, avisa de los fijos con «avísame» que siguen sin anotar. Una vez al mes. */
+    static void remindIfDue(Context c) {
+        SharedPreferences p = prefs(c);
+        java.util.Calendar cal = java.util.Calendar.getInstance();
+        int dom = cal.get(java.util.Calendar.DAY_OF_MONTH);
+        int dim = cal.getActualMaximum(java.util.Calendar.DAY_OF_MONTH);
+        if (dom < dim - 1) return;                               // solo penúltimo o último día
+        String ym = curYM();
+        if (!ym.equals(p.getString("remindMonth", ""))) return; // datos de este mes
+        String list = p.getString("reminders", "");
+        if (list == null || list.trim().isEmpty()) return;
+        if (ym.equals(p.getString("remindedYm", ""))) return;   // ya avisado este mes
+        p.edit().putString("remindedYm", ym).apply();
+        ensureChannels(c);
+        String text = "Fin de mes y no veo anotado: " + list + ". Si ya lo pagaste, abre la app y márcalo.";
+        Notification n = new NotificationCompat.Builder(c, CHANNEL_ALERT)
+                .setSmallIcon(R.drawable.ic_stat_money)
+                .setColor(MINT)
+                .setContentTitle("🔔 ¿Has anotado tus fijos?")
+                .setContentText(text)
+                .setStyle(new NotificationCompat.BigTextStyle().bigText(text))
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .setCategory(NotificationCompat.CATEGORY_REMINDER)
+                .setAutoCancel(true)
+                .setContentIntent(openApp(c, 106))
+                .build();
+        try {
+            NotificationManagerCompat.from(c).notify(REMIND_ID, n);
+        } catch (SecurityException ignored) {
+        }
     }
 
     /** Aviso fuerte cuando empiezas a comerte el ahorro (una vez por mes, se rearma si vuelves a ir bien). */

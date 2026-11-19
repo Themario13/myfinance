@@ -11,6 +11,7 @@ public class DailyReceiver extends BroadcastReceiver {
     public void onReceive(Context c, Intent i) {
         if (QuickStore.notifEnabled(c)) QuickStore.showNotification(c, null);
         QuickStore.checkAlert(c);
+        QuickStore.remindIfDue(c);
         QuickStore.scheduleDaily(c);
     }
 }
