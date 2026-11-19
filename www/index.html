@@ -228,7 +228,7 @@ const DEFAULT_CATS=[
  {id:"internet",name:"Internet y móvil",icon:"📶",color:"#22d3ee",type:"exp",budget:0},
  {id:"super",name:"Súper",icon:"🛒",color:"#3ee6a8",type:"exp",budget:0},
  {id:"casa",name:"Casa y muebles",icon:"🛋️",color:"#d6a76c",type:"exp",budget:0},
- {id:"transporte",name:"Transporte",icon:"🚗",color:"#60a5fa",type:"exp",budget:0},
+ {id:"transporte",name:"Gasolina",icon:"⛽",color:"#60a5fa",type:"exp",budget:0},
  {id:"ocio",name:"Comer fuera y ocio",icon:"🍽️",color:"#f472b6",type:"exp",budget:0},
  {id:"salud",name:"Salud y deporte",icon:"🧠",color:"#f87171",type:"exp",budget:0},
  {id:"tools",name:"Herramientas e IA",icon:"💻",color:"#2dd4bf",type:"exp",budget:0},
@@ -304,6 +304,7 @@ function normalize(){
     for(const c of S.cats){const d=DEFAULT_CATS.find(x=>x.id===c.id);if(d)c.color=d.color}
     S.v=2;
   }
+  {const tc=S.cats.find(c=>c.id==="transporte");if(tc&&tc.name==="Transporte"){tc.name="Gasolina";tc.icon="⛽"}}
   for(const fx of S.fixed){if(fx.auto===undefined)fx.auto=false}
   // migración: los fijos pasan a manual por defecto (tú marcas «Pagar»); activa «Anotar solo» en los que quieras
   if(!S.settings.fijosManualMig){for(const fx of S.fixed)fx.auto=false;S.settings.fijosManualMig=1}
@@ -647,7 +648,7 @@ function txRow(t){
   if(t.transfer){const to=t.transfer==="toCash";return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:var(--soft)">${to?"💵":"🏦"}</div><div class="mid"><div class="t">${to?"A efectivo en casa":"Ingresar al banco"}</div><div class="s">Traspaso · no es gasto</div></div><div class="amt num muted">${esc(money(t.amount))}</div></div>`}
   if(t.loan){const left=Math.round((t.amount-refundsOf(t.id))*100)/100;return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:var(--soft)">🤝</div><div class="mid"><div class="t">Préstamo a ${esc(t.who||"alguien")}</div><div class="s">${left>0.005?`Te debe ${esc(money(left))}`:"Devuelto ✓"}${t.cash?' <span class="tag">💵</span>':""}</div></div><div class="amt num exp">−${esc(money(t.amount))}</div></div>`}
   const c=cat(t.cat);const back=t.type==="exp"?refundsOf(t.id):0,of=refundTarget(t);
-  return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(t.note||c.name)}</div><div class="s">${esc(c.name)}${t.src==="bank"||t.src==="import"?'<span class="tag bank">banco</span>':""}${t.ext?'<span class="tag">otra cuenta</span>':""}${t.goal&&goalById(t.goal)?`<span class="tag auto">${esc(goalById(t.goal).icon||"🎯")} ${esc(goalById(t.goal).name.split(" ")[0])}</span>`:""}${t.src==="auto"?'<span class="tag auto">auto</span>':""}${t.review?'<span class="tag rev">revisar</span>':""}${t.cash?'<span class="tag">💵</span>':""}${t.fixedId?'<span class="tag auto">📅 fijo</span>':""}</div></div><div class="amt num ${t.type}">${t.type==="exp"?"−":"+"}${esc(money(t.amount))}${back?`<div class="note" style="font-weight:500">te devolvieron ${esc(money(back))}</div>`:""}${of?`<div class="note" style="font-weight:500">↩ ${esc((of.note||"").slice(0,18))}</div>`:""}</div></div>`;
+  return `<div class="row tap" data-tx="${t.id}"><div class="ic" style="background:${c.color}22">${c.icon}</div><div class="mid"><div class="t">${esc(t.note||c.name)}</div><div class="s">${esc(c.name)}${t.src==="bank"||t.src==="import"?'<span class="tag bank">banco</span>':""}${t.ext?'<span class="tag">otra cuenta</span>':""}${t.goal&&goalById(t.goal)?`<span class="tag auto">${esc(goalById(t.goal).icon||"🎯")} ${esc(goalById(t.goal).name.split(" ")[0])}</span>`:""}${t.src==="auto"?'<span class="tag auto">auto</span>':""}${t.review?'<span class="tag rev">revisar</span>':""}${t.cash?'<span class="tag">💵</span>':""}${t.fixedId?'<span class="tag auto">📅 fijo</span>':""}${t.ppl>0?`<span class="tag">⛽ ${t.ppl.toFixed(3).replace(".",",")} €/L</span>`:""}</div></div><div class="amt num ${t.type}">${t.type==="exp"?"−":"+"}${esc(money(t.amount))}${back?`<div class="note" style="font-weight:500">te devolvieron ${esc(money(back))}</div>`:""}${of?`<div class="note" style="font-weight:500">↩ ${esc((of.note||"").slice(0,18))}</div>`:""}</div></div>`;
 }
 function bindRows(root){root.querySelectorAll("[data-tx]").forEach(r=>r.onclick=()=>{const t=S.txs.find(x=>x.id===r.dataset.tx);if(t)(t.cajero?openCajero:openTx)(t)})}
 function openCajero(t){
@@ -739,7 +740,8 @@ function renderHome(){
       <div class="chips" style="flex-wrap:wrap;margin-top:6px">${r.months.map(mo=>`<button class="chip" data-collect="${r.f.id}|${mo.ym}">${esc(monthName(mo.ym,true).replace(".",""))} · ${esc(money0(mo.left))}</button>`).join("")}</div>
       <div class="note" style="margin-top:5px">Toca un mes para marcarlo cobrado o como ya saldado.</div></div>`).join("")}
     </div>`})()}
-  <button class="btn sec block" data-act="stats" style="margin-bottom:12px">📊 ¿En qué se me va el dinero?</button>`;
+  <button class="btn sec block" data-act="stats" style="margin-bottom:10px">📊 ¿En qué se me va el dinero?</button>
+  ${fuelTxs().length?`<button class="btn sec block" data-act="fuel" style="margin-bottom:12px">⛽ Mi gasolina${(()=>{const F=fuelTxs();return F.length?` · último ${F[F.length-1].ppl.toFixed(3).replace(".",",")} €/L`:""})()}</button>`:""}`;
   const collectMonth=(f,ym,settle)=>{const left=Math.round(((+f.amount)-fixedSum(f,ym))*100)/100;if(left<=0.005)return;const day=Math.min(+f.day||1,daysIn(ym));S.txs.push({id:uid(),type:"inc",amount:left,cat:f.cat,note:f.name,date:`${ym}-${pad(day)}`,fixedId:f.id,src:"manual",ts:Date.now(),created:Date.now(),cash:!settle&&f.cash||undefined,settle:settle||undefined});save();render()};
   const repayLoan=(loan,amount)=>{S.txs.push({id:uid(),type:"inc",amount:Math.round(amount*100)/100,cat:"devol",note:"Te devuelve "+(loan.who||"alguien"),date:todayISO(),src:"manual",ts:Date.now(),created:Date.now(),refundOf:loan.id,cash:loan.cash||undefined});save();render()};
   $("#main").querySelectorAll("[data-loanpaid]").forEach(b=>b.onclick=()=>{const l=S.txs.find(x=>x.id===b.dataset.loanpaid);const left=Math.round((l.amount-refundsOf(l.id))*100)/100;if(left>0.005){repayLoan(l,left);toast(`${l.who||"Te"} lo ha devuelto ✓`)}});
@@ -755,7 +757,7 @@ function renderHome(){
     })});
   bindRows($("#main"));
   $("#main").querySelectorAll("[data-act]").forEach(a=>a.onclick=e=>{e.stopPropagation();const x=a.dataset.act;
-    if(x==="sync")bankSync(true);else if(x==="csv")pickCSV();else if(x==="tips")openTips();else if(x==="stats")openStats();else if(x==="goal"||x==="goals")go("goals");else if(x==="closeok"){S.settings.closedSeen=addMonths(curYM(),-1);save();render()}
+    if(x==="sync")bankSync(true);else if(x==="csv")pickCSV();else if(x==="tips")openTips();else if(x==="stats")openStats();else if(x==="fuel")openFuel();else if(x==="goal"||x==="goals")go("goals");else if(x==="closeok"){S.settings.closedSeen=addMonths(curYM(),-1);save();render()}
     else if(x==="review"){filter="review";go("movs")}else if(x==="wizard")openWizard();else if(x==="balance")openBalance();else if(x==="cash")openCash();else if(x==="limits")openLimits();else go(x)});
   $("#main").querySelectorAll("[data-rise]").forEach(a=>a.onclick=()=>{const [id,ym,v]=a.dataset.rise.split("|");const f=S.fixed.find(x=>x.id===id);if(f){f.amount=Math.round(+v*100)/100;(S.settings.riseSeen=S.settings.riseSeen||[]).push(id+"|"+ym);applyAutoLimits();save();render();toast(`${f.name}: ahora ${money(f.amount)}`)}});
   $("#main").querySelectorAll("[data-rise-no]").forEach(a=>a.onclick=()=>{(S.settings.riseSeen=S.settings.riseSeen||[]).push(a.dataset.riseNo);save();render()});
@@ -783,6 +785,41 @@ function closingCard(){
     <div style="font-size:22px;font-weight:800;letter-spacing:-.02em">${saved<0?`Gastaste ${esc(money0(-saved))} más de lo que entró`:`${win?"🎉 ":""}Ahorraste ${esc(money0(saved))}`}${goal&&saved>=0?` <span class="muted" style="font-size:15px;font-weight:600">de ${esc(money0(goal))}</span>`:""}</div>
     ${lims.length?`<div class="note" style="margin-top:6px">Cumpliste ${ok.length} de ${lims.length} límites.${over.length?` Donde más te pasaste: <b>${esc(over[0].c.name)}</b> (+${esc(money0(over[0].v-over[0].c.budget))}).`:" ¡Todos! 👏"}</div>`:""}
     <button class="btn sec block" data-act="closeok" style="margin-top:12px">Vale 👍</button></div>`;
+}
+/** Repostajes anotados (gastos de transporte con €/litro), del más antiguo al más nuevo. */
+function fuelTxs(){return S.txs.filter(t=>t.type==="exp"&&t.ppl>0&&!t.transfer&&!t.loan).sort((a,b)=>(a.date+a.id).localeCompare(b.date+b.id))}
+function fuelChart(F){
+  const W=320,H=150,padX=8,padT=22,padB=28,vals=F.map(t=>t.ppl);
+  let lo=Math.min(...vals),hi=Math.max(...vals);if(hi-lo<0.05){lo-=0.05;hi+=0.05}const pad=(hi-lo)*0.15;lo-=pad;hi+=pad;
+  const n=F.length,X=i=>padX+(n<=1?(W-2*padX)/2:i*(W-2*padX)/(n-1)),Y=v=>padT+(1-(v-lo)/(hi-lo))*(H-padT-padB);
+  const line=F.map((t,i)=>`${X(i).toFixed(1)},${Y(t.ppl).toFixed(1)}`).join(" ");
+  const area=`${padX},${H-padB} ${line} ${X(n-1).toFixed(1)},${H-padB}`;
+  const dots=F.map((t,i)=>`<circle cx="${X(i).toFixed(1)}" cy="${Y(t.ppl).toFixed(1)}" r="3" fill="#60a5fa"/>`).join("");
+  const last=F[F.length-1];
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" style="margin:6px 0">
+    <text x="${padX}" y="12" font-size="10" fill="#8b93a1" font-family="Inter,sans-serif">${hi.toFixed(2).replace(".",",")} €/L</text>
+    <text x="${padX}" y="${H-14}" font-size="10" fill="#8b93a1" font-family="Inter,sans-serif">${lo.toFixed(2).replace(".",",")} €/L</text>
+    <polygon points="${area}" fill="#60a5fa" opacity="0.08"/>
+    <polyline points="${line}" fill="none" stroke="#60a5fa" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>${dots}
+    <text x="${X(n-1).toFixed(1)}" y="${Math.max(padT,Y(last.ppl)-8).toFixed(1)}" text-anchor="end" font-size="11" font-weight="700" fill="#eef1f4" font-family="Inter,sans-serif">${last.ppl.toFixed(3).replace(".",",")}</text>
+  </svg>`;
+}
+function openFuel(){
+  const F=fuelTxs();
+  if(F.length<1){openSheet(`<h3>⛽ Gasolina</h3><div class="note" style="margin-bottom:10px">Aún no has anotado repostajes con el precio del litro.</div><div class="note">Cuando anotes un gasto en <b>Transporte</b>, pon los <b>litros</b> o el <b>€/litro</b> y aquí verás a qué precio echas y cómo evoluciona.</div><button class="btn sec block" style="margin-top:14px" onclick="closeSheet()">Cerrar</button>`);return}
+  const totE=F.reduce((a,t)=>a+t.amount,0),totL=F.reduce((a,t)=>a+(t.liters||0),0),avg=totL?totE/totL:0;
+  const last=F[F.length-1],prev=F.length>1?F[F.length-2]:null;
+  const diff=prev?last.ppl-prev.ppl:0;
+  const trend=prev?(diff>0.001?`<span style="color:var(--exp)">▲ ${Math.abs(diff).toFixed(3).replace(".",",")}</span>`:diff<-0.001?`<span style="color:var(--mint)">▼ ${Math.abs(diff).toFixed(3).replace(".",",")}</span>`:`=`):"";
+  const rows=F.slice().reverse().slice(0,12).map(t=>`<div class="row"><div class="ic" style="background:#60a5fa22">⛽</div><div class="mid"><div class="t">${t.ppl.toFixed(3).replace(".",",")} €/L</div><div class="s">${esc(dayLabel(t.date))} · ${(t.liters||0).toFixed(2).replace(".",",")} L</div></div><div class="amt num exp">${esc(money(t.amount))}</div></div>`).join("");
+  openSheet(`<h3>⛽ Gasolina</h3>
+    <div class="card" style="margin:0 0 12px"><div class="mini" style="align-items:baseline"><span>Último precio</span><span><b class="num" style="font-size:20px">${last.ppl.toFixed(3).replace(".",",")} €/L</b> ${trend}</span></div>
+      ${fuelChart(F)}
+      <div class="mini" style="margin-top:8px"><span>Precio medio</span><b class="num">${avg.toFixed(3).replace(".",",")} €/L</b></div>
+      <div class="mini" style="margin-top:5px"><span>Total repostado</span><b class="num">${esc(money0(totE))} · ${totL.toFixed(0)} L</b></div>
+      <div class="mini" style="margin-top:5px"><span>Repostajes</span><b class="num">${F.length}</b></div></div>
+    <div class="note" style="margin-bottom:6px">Tus repostajes</div>${rows}
+    <button class="btn sec block" style="margin-top:14px" onclick="closeSheet()">Cerrar</button>`);
 }
 function openStats(){
   const bc=byCat(month),x=sums(month);
@@ -1106,7 +1143,7 @@ function openTx(t){
   const fromBank=t.src==="bank";
   const draw=el=>{
     el.querySelector("#tCats").innerHTML=catsOf(type).map(c=>`<button class="cat ${sel===c.id?"on":""}" data-c="${c.id}"><b>${c.icon}</b>${esc(c.name)}</button>`).join("");
-    el.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>{sel=b.dataset.c;el._auto=false;el.querySelectorAll("[data-c]").forEach(x=>x.classList.toggle("on",x===b))});
+    el.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>{sel=b.dataset.c;el._auto=false;el.querySelectorAll("[data-c]").forEach(x=>x.classList.toggle("on",x===b));const fu=el.querySelector("#tFuelRow");if(fu)fu.style.display=(type==="exp"&&sel==="transporte")?"":"none"});
     el.querySelectorAll(".seg button").forEach(b=>b.classList.toggle("on",b.dataset.t===type));
     el.querySelector("#tAmt").className="amount-in num "+type;
     el.querySelector("#tRefRow").style.display=type==="inc"&&!fromBank||(type==="inc"&&fromBank)?"":"none";
@@ -1114,6 +1151,7 @@ function openTx(t){
     if(type!=="exp")el.querySelector("#tGoalRow").style.display="none";else if(activeGoals().length||t.goal)el.querySelector("#tGoalRow").style.display="";
     const fxr=el.querySelector("#tFixRow");if(fxr)fxr.style.display=type==="exp"&&S.fixed.some(f=>(f.type||"exp")==="exp")?"":"none";
     const lnr=el.querySelector("#tLoanRow");if(lnr)lnr.style.display=type==="exp"?"":"none";
+    const fur=el.querySelector("#tFuelRow");if(fur)fur.style.display=(type==="exp"&&sel==="transporte")?"":"none";
   };
   openSheet(`<h3>${isNew?"Nuevo movimiento":fromBank?"Movimiento del banco":"Editar movimiento"}</h3>
    ${fromBank?"":`<div class="seg"><button data-t="exp">Gasto</button><button data-t="inc">Ingreso</button></div>`}
@@ -1121,6 +1159,9 @@ function openTx(t){
    <input class="in" id="tNote" placeholder="Concepto (ej: Mercadona)" value="${esc(t.note||"")}" style="margin-top:6px">
    <div class="field" id="tRefRow" style="display:none;margin-top:12px"><span>↩ ¿Es la devolución de un gasto? <span style="font-weight:500">(ej: te hacen Bizum de algo que pagaste tú)</span></span><div id="tRefBox"></div></div>
    <div class="cats" id="tCats"></div>
+   <div class="field" id="tFuelRow" style="display:none"><span>⛽ Repostaje <span style="font-weight:500">(opcional: pon los litros o el €/litro)</span></span>
+     <div class="grid2"><input class="in num" id="tLiters" inputmode="decimal" placeholder="Litros" value="${t.liters?amtStr(t.liters):""}"><input class="in num" id="tPpl" inputmode="decimal" placeholder="€/litro" value="${t.ppl?String(t.ppl).replace(".",","):""}"></div>
+     <div class="note" id="tFuelHint" style="margin-top:5px"></div></div>
    <div class="field" id="tGoalRow" ${activeGoals().length||t.goal?"":'style="display:none"'}><span>¿Es para un objetivo? <span style="font-weight:500">(sale de su hucha, no cuenta como gasto del mes)</span></span>
      <div class="chips" style="flex-wrap:wrap"><button class="chip ${t.goal?"":"on"}" data-g="">No</button>${(S.goals||[]).filter(g=>!g.archived||g.id===t.goal).map(g=>`<button class="chip ${t.goal===g.id?"on":""}" data-g="${g.id}">${esc(g.icon||"🎯")} ${esc(g.name)}</button>`).join("")}</div></div>
    <div class="set-row" id="tCashRow" style="border:0;padding-top:0"><div class="mid"><b>💵 En efectivo</b><div class="s">Sale o entra de tu bolsillo de efectivo, no del banco</div></div><button class="sw ${t.cash?"on":""}" id="tCash"></button></div>
@@ -1153,6 +1194,11 @@ function openTx(t){
     const amt=el.querySelector("#tAmt"),note=el.querySelector("#tNote");
     if(isNew)setTimeout(()=>amt.focus(),300);
     note.oninput=()=>{if(!sel||el._auto){const g=classify(note.value,type);if(g.sure){sel=g.cat;el._auto=true;draw(el)}}};
+    // repostaje: con el importe + litros calcula €/L (y al revés)
+    const litIn=el.querySelector("#tLiters"),pplIn=el.querySelector("#tPpl"),fuHint=el.querySelector("#tFuelHint");
+    const fuUpd=from=>{const A=parseAmt(amt.value)||0;if(from==="L"){const L=parseAmt(litIn.value)||0;if(A>0&&L>0)pplIn.value=(A/L).toFixed(3).replace(".",",")}if(from==="P"){const P=parseAmt(pplIn.value)||0;if(A>0&&P>0)litIn.value=(A/P).toFixed(2).replace(".",",")}
+      const L=parseAmt(litIn.value)||0,P=parseAmt(pplIn.value)||0;fuHint.textContent=(A>0&&L>0)?`${money(A)} · ${L.toFixed(2).replace(".",",")} L · ${(A/L).toFixed(3).replace(".",",")} €/L`:(A>0&&P>0)?`${money(A)} · ${(A/P).toFixed(2).replace(".",",")} L · ${P.toFixed(3).replace(".",",")} €/L`:"";};
+    litIn.oninput=()=>fuUpd("L");pplIn.oninput=()=>fuUpd("P");amt.addEventListener("input",()=>{if(sel==="transporte")fuUpd((parseAmt(litIn.value)||0)>0?"L":"P")});fuUpd();
     el.querySelector("#tSave").onclick=async()=>{
       const a=parseAmt(amt.value);if(!(a>0)){toast("Pon un importe");amt.focus();return}
       if(!sel)sel=classify(note.value,type).cat;
@@ -1161,9 +1207,10 @@ function openTx(t){
       const g=type==="exp"&&goalId&&!loan?goalId:undefined;
       const rf=type==="inc"&&refId?refId:undefined;if(rf){const tg=S.txs.find(x=>x.id===rf);if(tg)sel=tg.cat}
       const fx=type==="exp"&&fixId&&!loan?fixId:undefined;if(fx){const f=S.fixed.find(x=>x.id===fx);if(f)sel=f.cat}
+      let liters,ppl;if(type==="exp"&&sel==="transporte"){const L=parseAmt(litIn.value)||0,P=parseAmt(pplIn.value)||0;if(L>0){liters=Math.round(L*100)/100;ppl=Math.round(a/L*1000)/1000}else if(P>0){ppl=Math.round(P*1000)/1000;liters=Math.round(a/P*100)/100}}
       const id=isNew?uid():t.id;
-      if(isNew){S.txs.push({id,type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||todayISO(),src:"manual",ts:Date.now(),created:Date.now(),goal:g,refundOf:rf,cash:cashOn||undefined,fixedId:fx,loan:loan||undefined,who})}
-      else{const x=S.txs.find(y=>y.id===t.id);Object.assign(x,{type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||x.date,review:false,goal:g,refundOf:rf,cash:cashOn||undefined,fixedId:fx,loan:loan||undefined,who});if(!loan){delete x.loan;delete x.who}
+      if(isNew){S.txs.push({id,type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||todayISO(),src:"manual",ts:Date.now(),created:Date.now(),goal:g,refundOf:rf,cash:cashOn||undefined,fixedId:fx,loan:loan||undefined,who,liters,ppl})}
+      else{const x=S.txs.find(y=>y.id===t.id);Object.assign(x,{type,amount:a,cat:sel,note:note.value.trim(),date:el.querySelector("#tDate").value||x.date,review:false,goal:g,refundOf:rf,cash:cashOn||undefined,fixedId:fx,loan:loan||undefined,who,liters,ppl});if(!loan){delete x.loan;delete x.who}if(!(liters>0)){delete x.liters;delete x.ppl}
         if(prevCat!==sel&&!rf&&!fx&&!loan){const r=learn(x,sel);if(r)toast(`Aprendido: «${r.key}» → ${cat(sel).name}${r.n?` (+${r.n})`:""}`)}}
       if(fx){const m=ymOf(el.querySelector("#tDate").value||t.date||todayISO());S.txs=S.txs.filter(y=>!(y.src==="auto"&&y.fixedId===fx&&ymOf(y.date)===m&&y.id!==id))}  // quita el auto-anotado para no duplicar
       save();closeSheet();render();if(isNew)toast(loan?`Préstamo a ${who} 🤝`:fx?`Asociado a «${S.fixed.find(f=>f.id===fx).name}» 📅`:rf?"Devolución anotada ↩":g?`Anotado en «${goalById(g).name}» 🎯`:type==="exp"?"Gasto anotado":"Ingreso anotado");else if(rf)toast("Devolución asociada ↩");else if(fx)toast("Asociado al fijo 📅");
