@@ -363,6 +363,21 @@ public class QuickStore {
         am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi);
     }
 
+    /** Programa el refresco diario de la notificación (cada mañana a las 07:00). No suena: solo repinta el resumen. */
+    static void scheduleDaily(Context c) {
+        AlarmManager am = (AlarmManager) c.getSystemService(Context.ALARM_SERVICE);
+        if (am == null) return;
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.HOUR_OF_DAY, 7);
+        cal.set(Calendar.MINUTE, 0);
+        cal.set(Calendar.SECOND, 0);
+        cal.set(Calendar.MILLISECOND, 0);
+        if (cal.getTimeInMillis() <= System.currentTimeMillis() + 60000) cal.add(Calendar.DAY_OF_MONTH, 1);
+        Intent i = new Intent(c, DailyReceiver.class);
+        PendingIntent pi = PendingIntent.getBroadcast(c, 302, i, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, cal.getTimeInMillis(), pi);
+    }
+
     /** Notificación del domingo: lo gastado esta semana, lo que queda y cómo van los límites. */
     static void showWeekly(Context c) {
         SharedPreferences p = prefs(c);

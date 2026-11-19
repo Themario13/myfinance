@@ -46,6 +46,9 @@ jobs:
 
       - name: Compilar
         working-directory: android
+        env:
+          VERSION_CODE: ${{ github.run_number }}
+          VERSION_NAME: 1.0.${{ github.run_number }}
         run: |
           chmod +x gradlew
           ./gradlew assembleDebug --no-daemon

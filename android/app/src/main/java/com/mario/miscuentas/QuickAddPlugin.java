@@ -30,6 +30,7 @@ public class QuickAddPlugin extends Plugin {
                 ActivityCompat.requestPermissions(getActivity(), new String[] { Manifest.permission.POST_NOTIFICATIONS }, 7001);
             }
             QuickStore.showNotification(c, null);
+            QuickStore.scheduleDaily(c);
         } else {
             QuickStore.hideNotification(c);
         }
@@ -59,6 +60,7 @@ public class QuickAddPlugin extends Plugin {
                 .putString("cats", call.getString("cats", ""))
                 .apply();
         QuickStore.scheduleWeekly(c);
+        QuickStore.scheduleDaily(c);
         if (QuickStore.notifEnabled(c)) QuickStore.showNotification(c, null);
         QuickStore.updateWidgets(c);
         QuickStore.checkAlert(c);

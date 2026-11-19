@@ -11,5 +11,6 @@ public class BootReceiver extends BroadcastReceiver {
         if (i == null || !Intent.ACTION_BOOT_COMPLETED.equals(i.getAction())) return;
         if (QuickStore.notifEnabled(c)) QuickStore.showNotification(c, null);
         QuickStore.scheduleWeekly(c);
+        QuickStore.scheduleDaily(c);
     }
 }
